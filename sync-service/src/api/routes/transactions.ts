@@ -62,15 +62,18 @@ router.post('/meta/categories', async (req: Request, res: Response) => {
 
 // ── Transactions CRUD ─────────────────────────────────────────────────────────
 
-// GET /api/transactions — list with pagination + type filter
+// GET /api/transactions — list with pagination, type filter, search query, date range
 router.get('/', async (req: Request, res: Response) => {
   try {
     const page       = parseInt(String(req.query.page  ?? '1'));
     const limit      = parseInt(String(req.query.limit ?? '50'));
     const type       = req.query.type       ? String(req.query.type)       : undefined;
     const account_id = req.query.account_id ? String(req.query.account_id) : undefined;
+    const query      = req.query.query      ? String(req.query.query)      : undefined;
+    const start      = req.query.start      ? String(req.query.start)      : undefined;
+    const end        = req.query.end        ? String(req.query.end)        : undefined;
 
-    const txns = await getTransactions(page, limit, type, account_id);
+    const txns = await getTransactions(page, limit, type, account_id, query, start, end);
 
     // Flatten Firefly's nested structure: each "transaction group" has a transactions array
     const flat = txns.flatMap((group: Record<string, unknown>) => {

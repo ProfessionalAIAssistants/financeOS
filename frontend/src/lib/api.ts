@@ -50,6 +50,12 @@ export const insightsApi = {
   list: (limit=12)    => api.get(`/insights?limit=${limit}`).then(r => r.data.data),
   latest: ()          => api.get('/insights/latest').then(r => r.data.data),
   spending: (months=3)=> api.get(`/insights/spending?months=${months}`).then(r => r.data.data),
+  categories: (start?: string, end?: string) => {
+    const params: Record<string, string> = {};
+    if (start) params.start = start;
+    if (end)   params.end   = end;
+    return api.get('/insights/categories', { params }).then(r => r.data.data);
+  },
   generate: (year?:number, month?:number) =>
     api.post('/insights/generate', { year, month }).then(r => r.data),
 };
@@ -109,10 +115,13 @@ export const uploadApi = {
 
 // ── Transactions (full CRUD) ──────────────────────────────────────────────────
 export const transactionsApi = {
-  list: (page=1, limit=50, type?: string, accountId?: string) => {
+  list: (page=1, limit=50, type?: string, accountId?: string, query?: string, start?: string, end?: string) => {
     const params: Record<string, unknown> = { page, limit };
-    if (type) params.type = type;
+    if (type)      params.type       = type;
     if (accountId) params.account_id = accountId;
+    if (query)     params.query      = query;
+    if (start)     params.start      = start;
+    if (end)       params.end        = end;
     return api.get('/transactions', { params }).then(r => r.data.data ?? []);
   },
   get: (id: string)                  => api.get(`/transactions/${id}`).then(r => r.data.data),

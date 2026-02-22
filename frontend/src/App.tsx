@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider }  from './contexts/ThemeContext';
+import { ToastProvider }  from './components/ui/Toast';
 import { Layout }        from './components/layout/Layout';
 import { Dashboard }     from './pages/Dashboard';
 import { NetWorth }      from './pages/NetWorth';
@@ -27,6 +28,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={qc}>
+        <ToastProvider>
         <BrowserRouter>
           <Routes>
             <Route element={<Layout />}>
@@ -47,6 +49,7 @@ export default function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        </ToastProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

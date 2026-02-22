@@ -5,7 +5,9 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal, ModalFooter } from '../components/ui/Modal';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { PageSpinner } from '../components/ui/Spinner';
+import { useToast } from '../components/ui/Toast';
 import { fmt, fmtDate } from '../lib/utils';
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, PiggyBank } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -109,11 +111,13 @@ const defaultForm = (): BudgetFormState => ({
 
 export function Budgets() {
   const qc = useQueryClient();
+  const toast = useToast();
 
-  const [addOpen, setAddOpen]         = useState(false);
-  const [editBudget, setEditBudget]   = useState<Budget | null>(null);
-  const [form, setForm]               = useState<BudgetFormState>(defaultForm());
-  const [expanded, setExpanded]       = useState<string | null>(null);
+  const [addOpen, setAddOpen]           = useState(false);
+  const [editBudget, setEditBudget]     = useState<Budget | null>(null);
+  const [deleteBudget, setDeleteBudget] = useState<Budget | null>(null);
+  const [form, setForm]                 = useState<BudgetFormState>(defaultForm());
+  const [expanded, setExpanded]         = useState<string | null>(null);
 
   // ── Budget CRUD ──
   const { data: budgetsRaw = [], isLoading } = useQuery<Budget[]>(['budgets'], budgetsApi.list);
@@ -132,9 +136,11 @@ export function Budgets() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['budgets'] });
+      toast('Budget created', 'success');
       setAddOpen(false);
       setForm(defaultForm());
     },
+    onError: () => toast('Failed to create budget', 'error'),
   });
 
   const updateMutation = useMutation({
@@ -144,14 +150,20 @@ export function Budgets() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['budgets'] });
+      toast('Budget updated', 'success');
       setEditBudget(null);
       setForm(defaultForm());
     },
+    onError: () => toast('Failed to update budget', 'error'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => budgetsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['budgets'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['budgets'] });
+      toast('Budget deleted', 'success');
+    },
+    onError: () => toast('Failed to delete budget', 'error'),
   });
 
   function openEdit(b: Budget) {
@@ -165,9 +177,7 @@ export function Budgets() {
   }
 
   function handleDelete(b: Budget) {
-    if (confirm(`Delete budget "${b.attributes.name}"? This cannot be undone.`)) {
-      deleteMutation.mutate(b.id);
-    }
+    setDeleteBudget(b);
   }
 
   // ── Summary numbers ──
@@ -337,6 +347,16 @@ export function Budgets() {
           })}
         </div>
       )}
+
+      {/* Delete confirmation */}
+      <ConfirmModal
+        open={!!deleteBudget}
+        title="Delete budget?"
+        message={`"${deleteBudget?.attributes.name}" and all its limits will be permanently deleted.`}
+        confirmLabel="Delete"
+        onConfirm={() => deleteBudget && deleteMutation.mutate(deleteBudget.id)}
+        onClose={() => setDeleteBudget(null)}
+      />
 
       {/* Create / Edit modal */}
       <BudgetFormModal

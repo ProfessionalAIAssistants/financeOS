@@ -39,14 +39,19 @@ export function Forecasting() {
   const scenarios = forecast?.scenarios;
   const summary = forecast?.summary;
 
-  // Build chart data from forecast scenarios
-  const chartData = scenarios?.base?.map((pt: { month: number; netWorth: number }, i: number) => ({
-    month: `Mo ${pt.month}`,
-    base: pt.netWorth,
-    optimistic: scenarios.optimistic?.[i]?.netWorth,
-    pessimistic: scenarios.pessimistic?.[i]?.netWorth,
-    whatIfVal: whatIfResult?.whatIf?.[i]?.netWorth,
-  })) ?? [];
+  // Build chart data with real calendar month labels
+  const now = new Date();
+  const chartData = scenarios?.base?.map((pt: { month: number; netWorth: number }, i: number) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + pt.month, 1);
+    const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    return {
+      month: label,
+      base: pt.netWorth,
+      optimistic: scenarios.optimistic?.[i]?.netWorth,
+      pessimistic: scenarios.pessimistic?.[i]?.netWorth,
+      whatIfVal: whatIfResult?.whatIf?.[i]?.netWorth,
+    };
+  }) ?? [];
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">

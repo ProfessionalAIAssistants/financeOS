@@ -1,7 +1,19 @@
+import { Link } from 'react-router-dom';
 import { TrendingUp, TrendingDown, Wallet, PiggyBank } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell,
+  BarChart, Bar,
+} from 'recharts';
 import { useQuery } from '../hooks/useQuery';
 import { networthApi, insightsApi, subsApi } from '../lib/api';
+
+function thisMonthRange() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return { start, end };
+}
 import { StatCard } from '../components/ui/StatCard';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { PageSpinner } from '../components/ui/Spinner';
@@ -9,15 +21,18 @@ import { fmt, fmtDate, CHART_COLORS } from '../lib/utils';
 import { motion } from 'framer-motion';
 
 export function Dashboard() {
+  const { start, end } = thisMonthRange();
+
   const { data: current, isLoading } = useQuery(['nw-current'], networthApi.current);
-  const { data: history = [] } = useQuery(['nw-history-90'], () => networthApi.history(90));
-  const { data: insight } = useQuery(['insight-latest'], insightsApi.latest);
-  const { data: subsSummary } = useQuery(['subs-summary'], subsApi.summary);
+  const { data: history = [] }       = useQuery(['nw-history-90'], () => networthApi.history(90));
+  const { data: insight }            = useQuery(['insight-latest'], insightsApi.latest);
+  const { data: subsSummary }        = useQuery(['subs-summary'], subsApi.summary);
+  const { data: catSpending }        = useQuery(['cat-spending', start, end], () => insightsApi.categories(start, end));
 
   if (isLoading) return <PageSpinner />;
 
-  const netWorth = parseFloat(current?.net_worth ?? '0');
-  const assets = parseFloat(current?.total_assets ?? '0');
+  const netWorth   = parseFloat(current?.net_worth ?? '0');
+  const assets     = parseFloat(current?.total_assets ?? '0');
   const liabilities = parseFloat(current?.total_liabilities ?? '0');
 
   const chartData = history.map((h: { snapshot_date: string; net_worth: string | number }) => ({
@@ -25,8 +40,17 @@ export function Dashboard() {
     value: parseFloat(String(h.net_worth)),
   }));
 
-  const byCat = (subsSummary?.byCategory ?? []).slice(0, 6);
+  const byCat  = (subsSummary?.byCategory ?? []).slice(0, 6);
   const colors = CHART_COLORS();
+
+  // Category spending bar chart data
+  const spendingByCategory: Array<{ category: string; amount: number }> =
+    (catSpending?.byCategory ?? [])
+      .slice(0, 8)
+      .map((c: { category: string; total: number }) => ({
+        category: c.category || 'Uncategorized',
+        amount: c.total,
+      }));
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
@@ -66,18 +90,53 @@ export function Dashboard() {
             <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={55} />
-              <Tooltip formatter={(v: unknown) => [fmt(Number(v)), "Net Worth"]} contentStyle={{ background: 'var(--bg-tooltip)', border: '1px solid var(--border-strong)', borderRadius: 8 }} />
+              <Tooltip formatter={(v: unknown) => [fmt(Number(v)), 'Net Worth']} contentStyle={{ background: 'var(--bg-tooltip)', border: '1px solid var(--border-strong)', borderRadius: 8 }} />
               <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fill="url(#nwGrad)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </Card>
+
+      {/* Category spending chart */}
+      {spendingByCategory.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Spending by Category — This Month</CardTitle>
+            <Link to="/transactions" className="text-xs text-blue-400 hover:text-blue-300">View transactions →</Link>
+          </CardHeader>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={spendingByCategory} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(1)}k`} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis
+                  type="category"
+                  dataKey="category"
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={100}
+                  tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 13) + '…' : v}
+                />
+                <Tooltip
+                  formatter={(v: unknown) => [fmt(Number(v)), 'Spent']}
+                  contentStyle={{ background: 'var(--bg-tooltip)', border: '1px solid var(--border-strong)', borderRadius: 8 }}
+                />
+                <Bar dataKey="amount" radius={[0, 4, 4, 0]} maxBarSize={18}>
+                  {spendingByCategory.map((_: unknown, i: number) => (
+                    <Cell key={i} fill={colors[i % colors.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* AI Insight */}
@@ -99,7 +158,7 @@ export function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Subscription Spend</CardTitle>
-            <a href="/subscriptions" className="text-xs text-blue-400 hover:text-blue-300">View all →</a>
+            <Link to="/subscriptions" className="text-xs text-blue-400 hover:text-blue-300">View all →</Link>
           </CardHeader>
           {byCat.length > 0 ? (
             <div className="flex items-center gap-4">

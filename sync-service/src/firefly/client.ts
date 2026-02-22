@@ -28,10 +28,21 @@ export async function getAccountBalance(id: string): Promise<number> {
 }
 
 // ── Transactions ──────────────────────────────────────────────────────────────
-export async function getTransactions(page = 1, limit = 50, type?: string, accountId?: string) {
+export async function getTransactions(
+  page = 1,
+  limit = 50,
+  type?: string,
+  accountId?: string,
+  query?: string,
+  start?: string,
+  end?: string,
+) {
   const params: Record<string, unknown> = { page, limit };
-  if (type) params.type = type;
+  if (type)      params.type       = type;
   if (accountId) params.account_id = accountId;
+  if (query)     params.query      = query;
+  if (start)     params.start      = start;
+  if (end)       params.end        = end;
   const r = await ff.get('/transactions', { params });
   return r.data.data ?? [];
 }

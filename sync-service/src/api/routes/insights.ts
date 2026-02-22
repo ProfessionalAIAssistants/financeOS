@@ -50,4 +50,41 @@ router.get('/spending', async (req: Request, res: Response) => {
   res.json({ data: result.rows });
 });
 
+router.get('/categories', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const start = req.query.start as string
+      || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const end   = req.query.end   as string
+      || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+
+    // Import lazily to avoid circular deps
+    const { default: axios } = await import('axios');
+    const { config } = await import('../../config');
+    const ff = axios.create({
+      baseURL: `${config.fireflyUrl}/api/v1`,
+      headers: { Authorization: `Bearer ${config.fireflyToken}` },
+      timeout: 15000,
+    });
+    const r = await ff.get('/categories', { params: { start, end, limit: 200 } });
+    const cats = r.data.data ?? [];
+
+    const byCategory = cats
+      .map((c: Record<string, unknown>) => {
+        const attrs  = c.attributes as Record<string, unknown> | undefined;
+        const spent  = (attrs?.spent as Array<{ sum: string }> | undefined)?.[0]?.sum ?? '0';
+        return {
+          category: (attrs?.name as string) ?? 'Uncategorized',
+          total: Math.abs(parseFloat(spent)),
+        };
+      })
+      .filter((c: { total: number }) => c.total > 0)
+      .sort((a: { total: number }, b: { total: number }) => b.total - a.total);
+
+    res.json({ data: { byCategory, start, end } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch category spending', details: String(err) });
+  }
+});
+
 export default router;

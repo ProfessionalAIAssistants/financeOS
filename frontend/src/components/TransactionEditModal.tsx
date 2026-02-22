@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '../hooks/useQuery';
 import { useQuery } from '../hooks/useQuery';
 import { Modal, ModalFooter } from './ui/Modal';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { Button } from './ui/Button';
+import { useToast } from './ui/Toast';
 import { transactionsApi, tagsApi } from '../lib/api';
 import { X, Plus } from 'lucide-react';
 
@@ -48,6 +50,8 @@ const labelStyle = { color: 'var(--text-secondary)' };
 
 export function TransactionEditModal({ transaction, open, onClose }: Props) {
   const qc = useQueryClient();
+  const toast = useToast();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [form, setForm] = useState({
     description: '',
@@ -96,16 +100,20 @@ export function TransactionEditModal({ transaction, open, onClose }: Props) {
     mutationFn: (data: unknown) => transactionsApi.update(transaction!.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      toast('Transaction updated', 'success');
       onClose();
     },
+    onError: () => toast('Failed to update transaction', 'error'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => transactionsApi.delete(transaction!.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      toast('Transaction deleted', 'success');
       onClose();
     },
+    onError: () => toast('Failed to delete transaction', 'error'),
   });
 
   const createCategoryMutation = useMutation({
@@ -143,15 +151,22 @@ export function TransactionEditModal({ transaction, open, onClose }: Props) {
   }
 
   function handleDelete() {
-    if (confirm(`Delete "${transaction?.description}"? This cannot be undone.`)) {
-      deleteMutation.mutate();
-    }
+    setConfirmDelete(true);
   }
 
   const isSaving = updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
 
   return (
+    <>
+    <ConfirmModal
+      open={confirmDelete}
+      title="Delete transaction?"
+      message={`"${transaction?.description}" will be permanently deleted. This cannot be undone.`}
+      confirmLabel="Delete"
+      onConfirm={() => deleteMutation.mutate()}
+      onClose={() => setConfirmDelete(false)}
+    />
     <Modal open={open} onClose={onClose} title="Edit Transaction" size="lg">
       <div className="space-y-4">
         {/* Description */}
@@ -316,7 +331,7 @@ export function TransactionEditModal({ transaction, open, onClose }: Props) {
       <ModalFooter className="flex-wrap gap-2">
         <button
           className="mr-auto text-xs px-3 py-2 rounded-lg transition-colors"
-          style={{ color: 'var(--error, #f87171)', background: 'transparent' }}
+          style={{ color: '#f87171', background: 'transparent' }}
           onClick={handleDelete}
           disabled={isDeleting}
         >
@@ -328,5 +343,6 @@ export function TransactionEditModal({ transaction, open, onClose }: Props) {
         </Button>
       </ModalFooter>
     </Modal>
+    </>
   );
 }
