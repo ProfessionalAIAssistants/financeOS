@@ -58,6 +58,8 @@ export const insightsApi = {
   },
   generate: (year?:number, month?:number) =>
     api.post('/insights/generate', { year, month }).then(r => r.data),
+  savingsRate: ()  => api.get('/insights/savings-rate').then(r => r.data.data),
+  emergencyFund: () => api.get('/insights/emergency-fund').then(r => r.data.data),
 };
 
 // ── Subscriptions ────────────────────────────────────────────────────────────
@@ -73,7 +75,8 @@ export const subsApi = {
 export const forecastApi = {
   latest: (horizon=12)  => api.get(`/forecasting/latest?horizon=${horizon}`).then(r => r.data.data),
   history: ()           => api.get('/forecasting/history').then(r => r.data.data),
-  generate: (horizon=12)=> api.post('/forecasting/generate', { horizon }).then(r => r.data),
+  generate: (horizon=12, withdrawalRate?: number, inflationRate?: number) =>
+    api.post('/forecasting/generate', { horizon, withdrawalRate, inflationRate }).then(r => r.data),
   whatif: (params:unknown) => api.post('/forecasting/whatif', params).then(r => r.data.data),
 };
 

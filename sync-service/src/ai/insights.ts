@@ -6,7 +6,7 @@ import { createAlert } from '../alerts/ntfy';
 export async function generateMonthlyInsights(year: number, month: number): Promise<void> {
   console.log(`[Insights] Generating for ${year}-${month}`);
 
-  // Get net worth snapshot for that month
+  // Get net worth snapshot for that month (including breakdown JSON)
   const nwRes = await query(
     `SELECT net_worth, total_assets, total_liabilities, breakdown
      FROM net_worth_snapshots
@@ -16,13 +16,21 @@ export async function generateMonthlyInsights(year: number, month: number): Prom
   );
 
   const nw = nwRes.rows[0];
+  const breakdown = nw?.breakdown as Record<string, unknown> | undefined;
+
+  const totalIncome   = parseFloat(String(breakdown?.monthlyIncome   ?? breakdown?.totalIncome   ?? '0'));
+  const totalExpenses = parseFloat(String(breakdown?.monthlyExpenses ?? breakdown?.totalExpenses ?? '0'));
+  const savingsRate   = totalIncome > 0
+    ? Math.round(((totalIncome - totalExpenses) / totalIncome) * 100)
+    : 0;
+
   const stats = {
-    netWorth: parseFloat(nw?.net_worth ?? '0'),
-    totalAssets: parseFloat(nw?.total_assets ?? '0'),
+    netWorth:         parseFloat(nw?.net_worth         ?? '0'),
+    totalAssets:      parseFloat(nw?.total_assets      ?? '0'),
     totalLiabilities: parseFloat(nw?.total_liabilities ?? '0'),
-    totalIncome: 0,
-    totalExpenses: 0,
-    savingsRate: 0,
+    totalIncome,
+    totalExpenses,
+    savingsRate,
   };
 
   let narrative = '';
@@ -35,11 +43,19 @@ export async function generateMonthlyInsights(year: number, month: number): Prom
         messages: [
           {
             role: 'system',
-            content: 'You are a personal finance advisor. Write a concise, encouraging monthly financial summary in 3-4 sentences. Focus on trends and actionable insights.',
+            content: 'You are a personal finance advisor. Write a concise, encouraging monthly financial summary in 3-4 sentences. Focus on trends, savings rate, and actionable insights.',
           },
           {
             role: 'user',
-            content: `Month: ${year}-${month}\nNet Worth: $${stats.netWorth.toLocaleString()}\nAssets: $${stats.totalAssets.toLocaleString()}\nLiabilities: $${stats.totalLiabilities.toLocaleString()}`,
+            content: [
+              `Month: ${year}-${String(month).padStart(2, '0')}`,
+              `Net Worth: $${stats.netWorth.toLocaleString()}`,
+              `Assets: $${stats.totalAssets.toLocaleString()}`,
+              `Liabilities: $${stats.totalLiabilities.toLocaleString()}`,
+              `Monthly Income: $${stats.totalIncome.toLocaleString()}`,
+              `Monthly Expenses: $${stats.totalExpenses.toLocaleString()}`,
+              `Savings Rate: ${stats.savingsRate}%`,
+            ].join('\n'),
           },
         ],
         max_tokens: 300,
@@ -52,7 +68,12 @@ export async function generateMonthlyInsights(year: number, month: number): Prom
   }
 
   if (!narrative) {
-    narrative = `Your net worth stands at $${stats.netWorth.toLocaleString()} with $${stats.totalAssets.toLocaleString()} in assets and $${stats.totalLiabilities.toLocaleString()} in liabilities. Keep tracking your progress!`;
+    const savedAmt = stats.totalIncome - stats.totalExpenses;
+    narrative = `Your net worth stands at $${stats.netWorth.toLocaleString()} with $${stats.totalAssets.toLocaleString()} in assets and $${stats.totalLiabilities.toLocaleString()} in liabilities. `
+      + (stats.totalIncome > 0
+        ? `This month you earned $${stats.totalIncome.toLocaleString()} and spent $${stats.totalExpenses.toLocaleString()}, saving $${savedAmt.toLocaleString()} (${stats.savingsRate}% savings rate). `
+        : '')
+      + 'Keep tracking your progress!';
   }
 
   await createAlert({

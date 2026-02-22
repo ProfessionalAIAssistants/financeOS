@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '../hooks/useQuery';
 import { networthApi } from '../lib/api';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
@@ -95,10 +96,10 @@ export function Investments() {
               </div>
             </div>
           </div>
-          <a href="/upload" className="mt-4 block text-center py-2 rounded-lg text-sm text-blue-400 hover:text-blue-300 transition-colors"
+          <Link to="/upload" className="mt-4 block text-center py-2 rounded-lg text-sm text-blue-400 hover:text-blue-300 transition-colors"
             style={{ background: 'var(--bg-input)' }}>
             Import Investment Data →
-          </a>
+          </Link>
         </Card>
       </div>
     </div>

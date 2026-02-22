@@ -11,8 +11,7 @@ export function useQuery<T>(
   return useTanstackQuery<T, Error>({
     queryKey: key,
     queryFn: fetcher,
-    staleTime: 60_000,       // 1 minute
-    refetchInterval: 120_000, // auto-refresh every 2 minutes
+    staleTime: 60_000, // 1 minute
     retry: 2,
     ...options,
   });

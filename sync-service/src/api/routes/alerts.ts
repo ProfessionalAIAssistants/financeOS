@@ -5,7 +5,7 @@ import { sendPushNotification } from '../../alerts/ntfy';
 const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
-  const limit = parseInt(req.query.limit as string || '50');
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string || '50') || 50));
   const unreadOnly = req.query.unread === 'true';
   const severity = req.query.severity as string;
   const conditions: string[] = [];

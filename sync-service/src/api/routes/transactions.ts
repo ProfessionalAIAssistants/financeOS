@@ -65,8 +65,8 @@ router.post('/meta/categories', async (req: Request, res: Response) => {
 // GET /api/transactions — list with pagination, type filter, search query, date range
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const page       = parseInt(String(req.query.page  ?? '1'));
-    const limit      = parseInt(String(req.query.limit ?? '50'));
+    const page       = Math.max(1, parseInt(String(req.query.page  ?? '1'))  || 1);
+    const limit      = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? '50')) || 50));
     const type       = req.query.type       ? String(req.query.type)       : undefined;
     const account_id = req.query.account_id ? String(req.query.account_id) : undefined;
     const query      = req.query.query      ? String(req.query.query)      : undefined;

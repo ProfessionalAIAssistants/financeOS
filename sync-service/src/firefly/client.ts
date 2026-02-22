@@ -72,6 +72,11 @@ export async function getCategories() {
   return r.data.data ?? [];
 }
 
+export async function getCategorySpending(start: string, end: string) {
+  const r = await ff.get('/categories', { params: { start, end, limit: 200 } });
+  return r.data.data ?? [];
+}
+
 export async function createCategory(name: string) {
   const r = await ff.post('/categories', { name });
   return r.data.data;

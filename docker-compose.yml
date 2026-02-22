@@ -39,7 +39,7 @@ services:
       TRUSTED_PROXIES: "**"
       DEFAULT_LANGUAGE: en_US
       DEFAULT_LOCALE: equal
-      TZ: America/Denver
+      TZ: ${TZ:-America/Denver}
       CACHE_DRIVER: file
       SESSION_DRIVER: file
     volumes:
@@ -88,7 +88,7 @@ services:
       M1_USERNAME: ${M1_USERNAME}
       M1_PASSWORD: ${M1_PASSWORD}
       DOWNLOADS_DIR: /app/downloads
-      TZ: America/Denver
+      TZ: ${TZ:-America/Denver}
     volumes:
       - ./downloads:/app/downloads
       - ./uploads:/app/uploads

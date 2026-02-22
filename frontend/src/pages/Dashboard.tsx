@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Wallet, PiggyBank } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, PiggyBank, ShieldCheck, Percent } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -23,17 +23,29 @@ import { motion } from 'framer-motion';
 export function Dashboard() {
   const { start, end } = thisMonthRange();
 
-  const { data: current, isLoading } = useQuery(['nw-current'], networthApi.current);
-  const { data: history = [] }       = useQuery(['nw-history-90'], () => networthApi.history(90));
-  const { data: insight }            = useQuery(['insight-latest'], insightsApi.latest);
-  const { data: subsSummary }        = useQuery(['subs-summary'], subsApi.summary);
-  const { data: catSpending }        = useQuery(['cat-spending', start, end], () => insightsApi.categories(start, end));
+  // Net worth polls every 2 min — it changes on account sync
+  const { data: current, isLoading } = useQuery(['nw-current'], networthApi.current, { refetchInterval: 120_000 });
+  const { data: history = [] }       = useQuery(['nw-history-90'], () => networthApi.history(90), { refetchInterval: 120_000 });
+  // Static-ish data — no auto-poll needed
+  const { data: insight }      = useQuery(['insight-latest'], insightsApi.latest);
+  const { data: subsSummary }  = useQuery(['subs-summary'], subsApi.summary);
+  const { data: catSpending }  = useQuery(['cat-spending', start, end], () => insightsApi.categories(start, end));
+  const { data: emergencyFund }= useQuery(['emergency-fund'], insightsApi.emergencyFund);
 
   if (isLoading) return <PageSpinner />;
 
-  const netWorth   = parseFloat(current?.net_worth ?? '0');
-  const assets     = parseFloat(current?.total_assets ?? '0');
+  const netWorth    = parseFloat(current?.net_worth ?? '0');
+  const assets      = parseFloat(current?.total_assets ?? '0');
   const liabilities = parseFloat(current?.total_liabilities ?? '0');
+
+  const monthlyIncome   = parseFloat(current?.breakdown?.monthlyIncome   ?? '0');
+  const monthlyExpenses = parseFloat(current?.breakdown?.monthlyExpenses ?? '0');
+  const savingsRate     = monthlyIncome > 0
+    ? Math.round(((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100)
+    : null;
+
+  const efMonths    = emergencyFund?.monthsCovered ?? null;
+  const efPct       = emergencyFund?.pctOfTarget ?? null;
 
   const chartData = history.map((h: { snapshot_date: string; net_worth: string | number }) => ({
     date: fmtDate(h.snapshot_date, 'MMM d'),
@@ -72,12 +84,91 @@ export function Dashboard() {
         </p>
       </div>
 
+      {/* Plain-language verdict strip */}
+      {(savingsRate !== null || efMonths !== null) && (() => {
+        const parts: string[] = [];
+        if (savingsRate !== null) {
+          const monthlySaved = monthlyIncome - monthlyExpenses;
+          if (savingsRate >= 20) {
+            parts.push(`Saving ${savingsRate}% of income (${fmt(monthlySaved)}/mo) — excellent pace.`);
+          } else if (savingsRate >= 10) {
+            parts.push(`Saving ${savingsRate}% of income (${fmt(monthlySaved)}/mo). Aim for 20%+ to build wealth faster.`);
+          } else if (savingsRate > 0) {
+            parts.push(`Saving ${savingsRate}% of income this month. Cutting expenses would accelerate progress.`);
+          } else {
+            parts.push(`Spending is outpacing income right now — focus on reducing expenses or boosting income.`);
+          }
+        }
+        if (efMonths !== null) {
+          if (efMonths >= 6) {
+            parts.push(`Emergency fund covers ${efMonths} months — well protected.`);
+          } else if (efMonths >= 3) {
+            parts.push(`Emergency fund covers ${efMonths} months; build toward 6 months next.`);
+          } else {
+            parts.push(`Emergency fund only covers ${efMonths} month${efMonths === 1 ? '' : 's'} — prioritize building this safety net.`);
+          }
+        }
+        if (parts.length === 0) return null;
+        return (
+          <div className="glass px-5 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)', borderLeft: '3px solid var(--accent)' }}>
+            <span>{parts.join(' ')}</span>
+            <Link to="/forecasting" className="ml-auto shrink-0 text-xs" style={{ color: 'var(--accent)' }}>
+              See retirement timeline →
+            </Link>
+          </div>
+        );
+      })()}
+
       {/* Stat row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Assets"       value={assets}      icon={<TrendingUp className="w-4 h-4"/>}     glow="green"  delay={0} />
-        <StatCard title="Total Liabilities"  value={liabilities} icon={<TrendingDown className="w-4 h-4"/>}   glow="red"    delay={0.05} />
-        <StatCard title="Monthly Income"     value={parseFloat(current?.breakdown?.monthlyIncome ?? '0')}    icon={<Wallet className="w-4 h-4"/>}       glow="blue"   delay={0.1} />
-        <StatCard title="Monthly Expenses"   value={parseFloat(current?.breakdown?.monthlyExpenses ?? '0')}  icon={<PiggyBank className="w-4 h-4"/>}    glow="purple" delay={0.15} />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard title="Total Assets"      value={assets}       icon={<TrendingUp className="w-4 h-4"/>}   glow="green"  delay={0} />
+        <StatCard title="Total Liabilities" value={liabilities}  icon={<TrendingDown className="w-4 h-4"/>} glow="red"    delay={0.05} />
+        <StatCard title="Monthly Income"    value={monthlyIncome}  icon={<Wallet className="w-4 h-4"/>}     glow="blue"   delay={0.1} />
+        <StatCard title="Monthly Expenses"  value={monthlyExpenses} icon={<PiggyBank className="w-4 h-4"/>} glow="purple" delay={0.15} />
+
+        {/* Savings Rate */}
+        <div
+          className="glass p-5"
+          title="Savings rate = (income − expenses) / income. Target: 20%+ for strong wealth building."
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                Savings Rate
+              </p>
+              <p className={`text-2xl font-bold ${savingsRate == null ? '' : savingsRate >= 20 ? 'text-emerald-400' : savingsRate >= 10 ? 'text-yellow-400' : 'text-red-400'}`}>
+                {savingsRate != null ? `${savingsRate}%` : '—'}
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>target: 20%+</p>
+            </div>
+            <div className="ml-3 p-2.5 rounded-xl shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+              <Percent className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Emergency Fund */}
+        <div
+          className="glass p-5"
+          title="Emergency fund = liquid assets ÷ monthly expenses. Target: 6 months of coverage."
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                Emergency Fund
+              </p>
+              <p className={`text-2xl font-bold ${efMonths == null ? '' : efMonths >= 6 ? 'text-emerald-400' : efMonths >= 3 ? 'text-yellow-400' : 'text-red-400'}`}>
+                {efMonths != null ? `${efMonths}mo` : '—'}
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                {efPct != null ? `${Math.min(efPct, 100)}% of 6mo target` : 'target: 6 months'}
+              </p>
+            </div>
+            <div className="ml-3 p-2.5 rounded-xl shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Net Worth chart */}

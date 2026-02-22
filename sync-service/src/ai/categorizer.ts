@@ -51,7 +51,9 @@ export async function categorizeTransactions(transactions: TxInput[]): Promise<M
         results.set(tx.id, r.rows[0].category);
         continue;
       }
-    } catch { /* DB not ready */ }
+    } catch (err) {
+      console.warn('[Categorizer] DB cache lookup failed:', err instanceof Error ? err.message : err);
+    }
 
     // Rule-based fallback
     const cat = ruleBasedCategory(tx.description);
@@ -98,7 +100,8 @@ export async function categorizeTransactions(transactions: TxInput[]): Promise<M
       results.set(needsAI[i].id, valid);
       await cacheMerchant(needsAI[i].description, valid, 'ai');
     }
-  } catch {
+  } catch (err) {
+    console.error('[Categorizer] AI batch failed:', err instanceof Error ? err.message : err);
     for (const tx of needsAI) results.set(tx.id, 'other');
   }
 
@@ -112,5 +115,7 @@ async function cacheMerchant(merchant: string, category: string, source: string)
        VALUES ($1, $2, $3) ON CONFLICT (merchant_name) DO NOTHING`,
       [merchant.toLowerCase().trim(), category, source]
     );
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.warn('[Categorizer] Failed to cache merchant:', err instanceof Error ? err.message : err);
+  }
 }
