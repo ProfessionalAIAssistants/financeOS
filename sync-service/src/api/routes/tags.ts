@@ -13,8 +13,9 @@ const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { page = '1', limit = '200' } = req.query as Record<string, string>;
-    const tags = await getTags(parseInt(page), parseInt(limit));
+    const page  = parseInt(String(req.query.page  ?? '1'));
+    const limit = parseInt(String(req.query.limit ?? '200'));
+    const tags = await getTags(page, limit);
     res.json({ data: tags });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tags', details: String(err) });
@@ -35,7 +36,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:tag', async (req: Request, res: Response) => {
   try {
     const { tag, description } = req.body;
-    const updated = await updateTag(req.params.tag, { tag, description });
+    const updated = await updateTag(String(req.params.tag), { tag, description });
     res.json({ data: updated });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update tag', details: String(err) });
@@ -44,7 +45,7 @@ router.put('/:tag', async (req: Request, res: Response) => {
 
 router.delete('/:tag', async (req: Request, res: Response) => {
   try {
-    await deleteTag(req.params.tag);
+    await deleteTag(String(req.params.tag));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete tag', details: String(err) });
@@ -55,8 +56,9 @@ router.delete('/:tag', async (req: Request, res: Response) => {
 
 router.get('/:tag/transactions', async (req: Request, res: Response) => {
   try {
-    const { page = '1', limit = '50' } = req.query as Record<string, string>;
-    const txns = await getTagTransactions(req.params.tag, parseInt(page), parseInt(limit));
+    const page  = parseInt(String(req.query.page  ?? '1'));
+    const limit = parseInt(String(req.query.limit ?? '50'));
+    const txns = await getTagTransactions(String(req.params.tag), page, limit);
     res.json({ data: txns });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tag transactions', details: String(err) });

@@ -4,7 +4,7 @@ import { checkForAnomalies } from '../ai/anomaly';
 export async function runAnomalyCheck(): Promise<void> {
   console.log('[Job] Running anomaly check...');
   try {
-    const txns = await getTransactions(undefined, 1, 100);
+    const txns = await getTransactions(1, 100);
     if (!txns.length) return;
     await checkForAnomalies(txns.map((t: { id: string; attributes: { description: string; amount: string; date: string } }) => ({
       id: String(t.id),
