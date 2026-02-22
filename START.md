@@ -36,17 +36,17 @@ docker compose logs -f
 ```
 
 ### 3. Set up Firefly III (one-time)
-1. Open http://localhost:8070
+1. Open http://localhost:57070
 2. Create your admin account
 3. Go to **Profile → OAuth → Personal Access Tokens → Create**
 4. Copy the token into `.env` as `FIREFLY_TOKEN=`
 5. Restart sync-service: `docker compose restart sync-service`
 
 ### 4. Access the dashboard
-- **Dashboard:**     http://localhost:8072
-- **Firefly III:**   http://localhost:8070
-- **DB Admin:**      http://localhost:8071
-- **ntfy alerts:**   http://localhost:8073
+- **Dashboard:**     http://localhost:57072
+- **Firefly III:**   http://localhost:57070
+- **DB Admin:**      http://localhost:57071
+- **ntfy alerts:**   http://localhost:57073
 
 ### 5. Mobile access
 Install **Tailscale** on both PC and phone for secure remote access.
@@ -70,12 +70,12 @@ Go to **Import** page → drop OFX or CSV file → select institution.
 ## Ports Used
 | Service       | Port  |
 |---------------|-------|
-| Dashboard     | 8072  |
-| Firefly III   | 8070  |
-| DB Admin      | 8071  |
-| ntfy alerts   | 8073  |
-| Sync API      | 3010  |
-| PostgreSQL    | 54320 |
+| Dashboard     | 57072 |
+| Firefly III   | 57070 |
+| DB Admin      | 57071 |
+| ntfy alerts   | 57073 |
+| Sync API      | 57010 |
+| PostgreSQL    | 57432 |
 
 ## Stop / Restart
 ```powershell
