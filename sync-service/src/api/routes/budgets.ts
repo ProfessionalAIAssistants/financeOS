@@ -1,0 +1,119 @@
+import { Router, Request, Response } from 'express';
+import {
+  getBudgets,
+  getBudget,
+  createBudget,
+  updateBudget,
+  deleteBudget,
+  getBudgetLimits,
+  createBudgetLimit,
+  updateBudgetLimit,
+  deleteBudgetLimit,
+  getBudgetTransactions,
+} from '../../firefly/client';
+
+const router = Router();
+
+// ── Budgets CRUD ──────────────────────────────────────────────────────────────
+
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const budgets = await getBudgets();
+    res.json({ data: budgets });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch budgets', details: String(err) });
+  }
+});
+
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const budget = await getBudget(req.params.id);
+    res.json({ data: budget });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch budget', details: String(err) });
+  }
+});
+
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { name, active, auto_budget_type, auto_budget_amount, auto_budget_period } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const budget = await createBudget({ name, active, auto_budget_type, auto_budget_amount, auto_budget_period });
+    res.status(201).json({ data: budget });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create budget', details: String(err) });
+  }
+});
+
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const budget = await updateBudget(req.params.id, req.body);
+    res.json({ data: budget });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update budget', details: String(err) });
+  }
+});
+
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    await deleteBudget(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete budget', details: String(err) });
+  }
+});
+
+// ── Budget Limits (spending caps per period) ───────────────────────────────────
+
+router.get('/:id/limits', async (req: Request, res: Response) => {
+  try {
+    const { start, end } = req.query as { start?: string; end?: string };
+    const limits = await getBudgetLimits(req.params.id, start, end);
+    res.json({ data: limits });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch budget limits', details: String(err) });
+  }
+});
+
+router.post('/:id/limits', async (req: Request, res: Response) => {
+  try {
+    const { start, end, amount, currency_id } = req.body;
+    if (!start || !end || !amount) return res.status(400).json({ error: 'start, end, and amount are required' });
+    const limit = await createBudgetLimit(req.params.id, { start, end, amount, currency_id });
+    res.status(201).json({ data: limit });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create budget limit', details: String(err) });
+  }
+});
+
+router.put('/:id/limits/:limitId', async (req: Request, res: Response) => {
+  try {
+    const limit = await updateBudgetLimit(req.params.id, req.params.limitId, req.body);
+    res.json({ data: limit });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update budget limit', details: String(err) });
+  }
+});
+
+router.delete('/:id/limits/:limitId', async (req: Request, res: Response) => {
+  try {
+    await deleteBudgetLimit(req.params.id, req.params.limitId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete budget limit', details: String(err) });
+  }
+});
+
+// ── Budget Transactions ────────────────────────────────────────────────────────
+
+router.get('/:id/transactions', async (req: Request, res: Response) => {
+  try {
+    const { start, end, page = '1', limit = '50' } = req.query as Record<string, string>;
+    const txns = await getBudgetTransactions(req.params.id, start, end, parseInt(page), parseInt(limit));
+    res.json({ data: txns });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch budget transactions', details: String(err) });
+  }
+});
+
+export default router;

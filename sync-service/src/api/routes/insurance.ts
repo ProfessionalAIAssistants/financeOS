@@ -1,0 +1,111 @@
+import { Router, Request, Response } from 'express';
+import { query } from '../../db/client';
+import { config } from '../../config';
+import OpenAI from 'openai';
+
+const router = Router();
+
+router.get('/', async (_req: Request, res: Response) => {
+  const result = await query(`SELECT * FROM insurance_policies ORDER BY policy_type, provider`);
+  res.json({ data: result.rows });
+});
+
+router.get('/summary/annual-cost', async (_req: Request, res: Response) => {
+  const result = await query(
+    `SELECT policy_type,
+       SUM(CASE WHEN premium_frequency = 'monthly' THEN premium_amount * 12
+                WHEN premium_frequency = 'annual' THEN premium_amount
+                ELSE premium_amount * 12 END) as annual_cost
+     FROM insurance_policies GROUP BY policy_type`
+  );
+  res.json({ data: result.rows });
+});
+
+router.get('/:id', async (req: Request, res: Response) => {
+  const result = await query(`SELECT * FROM insurance_policies WHERE id = $1`, [req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json({ data: result.rows[0] });
+});
+
+router.post('/', async (req: Request, res: Response) => {
+  const { policyType, provider, policyNumber, coverageAmount, premiumAmount,
+          premiumFrequency, deductible, renewalDate, notes } = req.body;
+  const result = await query(
+    `INSERT INTO insurance_policies (policy_type, provider, policy_number, coverage_amount, premium_amount,
+      premium_frequency, deductible, renewal_date, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [policyType, provider, policyNumber || null, coverageAmount || null, premiumAmount || null,
+     premiumFrequency || 'monthly', deductible || null, renewalDate || null, notes || null]
+  );
+  res.status(201).json({ data: result.rows[0] });
+});
+
+router.put('/:id', async (req: Request, res: Response) => {
+  const fields = req.body;
+  const keys = Object.keys(fields);
+  if (!keys.length) return res.status(400).json({ error: 'No fields provided' });
+  const setClauses = keys.map((k, i) => `${k.replace(/([A-Z])/g, '_$1').toLowerCase()} = $${i + 1}`);
+  await query(
+    `UPDATE insurance_policies SET ${setClauses.join(', ')}, updated_at = now() WHERE id = $${keys.length + 1}`,
+    [...Object.values(fields), req.params.id]
+  );
+  res.json({ success: true });
+});
+
+router.delete('/:id', async (req: Request, res: Response) => {
+  await query(`DELETE FROM insurance_policies WHERE id = $1`, [req.params.id]);
+  res.json({ success: true });
+});
+
+router.post('/:id/ai-review', async (req: Request, res: Response) => {
+  const policyRes = await query(`SELECT * FROM insurance_policies WHERE id = $1`, [req.params.id]);
+  if (!policyRes.rows[0]) return res.status(404).json({ error: 'Policy not found' });
+  const policy = policyRes.rows[0];
+  const nwRes = await query(`SELECT net_worth, total_assets FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1`);
+  const nw = nwRes.rows[0];
+
+  let assetContext = '';
+  if (policy.policy_type === 'home') {
+    const rows = await query(`SELECT name, current_value, address FROM manual_assets WHERE asset_type = 'real_estate' AND is_active = true`);
+    if (rows.rows.length) assetContext = 'Real estate: ' + rows.rows.map((a: { name: string; current_value: string; address: string }) => `${a.name}: $${a.current_value} (${a.address})`).join(', ');
+  } else if (policy.policy_type === 'auto') {
+    const rows = await query(`SELECT name, current_value, year, make, model FROM manual_assets WHERE asset_type = 'vehicle' AND is_active = true`);
+    if (rows.rows.length) assetContext = 'Vehicles: ' + rows.rows.map((v: { year: number; make: string; model: string; current_value: string }) => `${v.year} ${v.make} ${v.model}: $${v.current_value}`).join(', ');
+  }
+
+  let review = '';
+  if (config.openaiApiKey) {
+    try {
+      const openai = new OpenAI({ apiKey: config.openaiApiKey });
+      const resp = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a personal finance insurance advisor. Provide concise, actionable insurance coverage analysis in 2-3 paragraphs.' },
+          { role: 'user', content: `Review this insurance policy:\nType: ${policy.policy_type}\nProvider: ${policy.provider}\nCoverage: $${policy.coverage_amount}\nPremium: $${policy.premium_amount}/${policy.premium_frequency}\nDeductible: $${policy.deductible}\nRenewal: ${policy.renewal_date}\n\nNet Worth: $${nw?.net_worth || 'unknown'}\nAssets: $${nw?.total_assets || 'unknown'}\n${assetContext}\n\nProvide coverage adequacy analysis and 2-3 specific recommendations.` },
+        ],
+        max_tokens: 500,
+        temperature: 0.4,
+      });
+      review = resp.choices[0].message.content || '';
+    } catch (err) {
+      console.error('[Insurance] AI review error:', err);
+    }
+  }
+
+  if (!review) {
+    const coverage = parseFloat(policy.coverage_amount || '0');
+    const netWorth = parseFloat(nw?.net_worth || '0');
+    const reviews: string[] = [];
+    if (policy.policy_type === 'life' && coverage < netWorth * 0.5) reviews.push(`Your life insurance coverage of $${coverage.toLocaleString()} may be insufficient. Consider 5-10x annual income.`);
+    if (policy.policy_type === 'umbrella' && coverage < netWorth) reviews.push(`Your umbrella policy of $${coverage.toLocaleString()} is less than your net worth. Consider increasing.`);
+    if (policy.renewal_date) {
+      const days = Math.ceil((new Date(policy.renewal_date).getTime() - Date.now()) / 86400000);
+      if (days < 60) reviews.push(`Your ${policy.policy_type} policy renews in ${days} days. Consider shopping rates.`);
+    }
+    review = reviews.join('\n\n') || `Your ${policy.policy_type} policy with ${policy.provider} appears adequate. Review annually.`;
+  }
+
+  await query(`UPDATE insurance_policies SET ai_review = $1, updated_at = now() WHERE id = $2`, [review, req.params.id]);
+  res.json({ data: { review, policy: { ...policy, ai_review: review } } });
+});
+
+export default router;

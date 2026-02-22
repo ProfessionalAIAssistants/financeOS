@@ -1,0 +1,2 @@
+﻿ofxtools==0.9.3
+requests==2.31.0

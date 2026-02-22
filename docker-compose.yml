@@ -1,0 +1,148 @@
+services:
+
+  # ── PostgreSQL 16 ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-financeos}
+      POSTGRES_USER: ${POSTGRES_USER:-financeos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "54321:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-financeos} -d ${POSTGRES_DB:-financeos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Firefly III ──────────────────────────────────────────────────────────
+  firefly:
+    image: fireflyiii/core:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_KEY: ${FIREFLY_APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-financeos}
+      DB_USERNAME: ${POSTGRES_USER:-financeos}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_URL: http://localhost:8070
+      TRUSTED_PROXIES: "**"
+      DEFAULT_LANGUAGE: en_US
+      DEFAULT_LOCALE: equal
+      TZ: America/Denver
+      CACHE_DRIVER: file
+      SESSION_DRIVER: file
+    volumes:
+      - firefly_upload:/var/www/html/storage/upload
+    ports:
+      - "8070:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/v1/about || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # ── Sync Service (Node.js) ───────────────────────────────────────────────
+  sync-service:
+    build:
+      context: ./sync-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      firefly:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+      DATABASE_URL: postgresql://${POSTGRES_USER:-financeos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-financeos}
+      FIREFLY_URL: http://firefly:8080
+      FIREFLY_TOKEN: ${FIREFLY_TOKEN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NTFY_URL: http://ntfy:80
+      NTFY_TOPIC: ${NTFY_TOPIC:-financeos}
+      HOMESAGE_API_KEY: ${HOMESAGE_API_KEY}
+      RENTCAST_API_KEY: ${RENTCAST_API_KEY}
+      CHASE_USERNAME: ${CHASE_USERNAME}
+      CHASE_PASSWORD: ${CHASE_PASSWORD}
+      USAA_USERNAME: ${USAA_USERNAME}
+      USAA_PASSWORD: ${USAA_PASSWORD}
+      CAPITALONE_USERNAME: ${CAPITALONE_USERNAME}
+      CAPITALONE_PASSWORD: ${CAPITALONE_PASSWORD}
+      MACU_USERNAME: ${MACU_USERNAME}
+      MACU_PASSWORD: ${MACU_PASSWORD}
+      M1_USERNAME: ${M1_USERNAME}
+      M1_PASSWORD: ${M1_PASSWORD}
+      DOWNLOADS_DIR: /app/downloads
+      TZ: America/Denver
+    volumes:
+      - ./downloads:/app/downloads
+      - ./uploads:/app/uploads
+    ports:
+      - "3010:3010"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3010/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── Frontend (React + nginx) ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - sync-service
+    ports:
+      - "8072:80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost/ > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Adminer (DB admin UI) ────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8071:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+  # ── ntfy (push notifications) ────────────────────────────────────────────
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: http://localhost:8073
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    ports:
+      - "8073:80"
+
+volumes:
+  pgdata:
+  firefly_upload:
+  ntfy_data:
