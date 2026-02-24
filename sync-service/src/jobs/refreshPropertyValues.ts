@@ -1,12 +1,14 @@
 import { query } from '../db/client';
 import { fetchPropertyValue } from '../assets/propertyValuation';
 import { evaluateAlertRules } from '../alerts/rules';
+import logger from '../lib/logger';
 
 export async function refreshPropertyValues(): Promise<void> {
-  console.log('[PropertyValues] Refreshing...');
+  logger.info('Refreshing property values');
   try {
     const assets = await query(
-      `SELECT * FROM manual_assets WHERE asset_type = 'real_estate' AND is_active = true`
+      `SELECT id, user_id, name, address, city, state, zip, current_value
+       FROM manual_assets WHERE asset_type = 'real_estate' AND is_active = true`
     );
 
     for (const asset of assets.rows) {
@@ -33,6 +35,7 @@ export async function refreshPropertyValues(): Promise<void> {
       if (Math.abs(changePct) > 5) {
         await evaluateAlertRules({
           type: 'asset_value_change',
+          userId: asset.user_id,
           description: `${asset.name} value ${changePct > 0 ? 'up' : 'down'} ${Math.abs(changePct).toFixed(1)}%: $${newValue.toLocaleString()}`,
           amount: newValue,
           metadata: { assetId: asset.id, oldValue, newValue, changePct },
@@ -40,6 +43,6 @@ export async function refreshPropertyValues(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error('[PropertyValues] Error:', err instanceof Error ? err.message : err);
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Property values refresh error');
   }
 }

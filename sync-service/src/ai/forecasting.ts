@@ -1,4 +1,5 @@
 import { query } from '../db/client';
+import logger from '../lib/logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -234,21 +235,23 @@ export async function runForecasting(
   horizonMonths  = 12,
   withdrawalRate = 0.04,  // e.g. 0.04 = 4% safe withdrawal rate
   inflationRate  = 0.03,  // e.g. 0.03 = 3% annual inflation
+  userId?: string,
 ): Promise<void> {
-  console.log(
-    `[Forecasting] Running ${horizonMonths}-month Monte Carlo (1000 trials, ` +
-    `withdrawal=${(withdrawalRate * 100).toFixed(2)}%, inflation=${(inflationRate * 100).toFixed(1)}%)...`
+  logger.info(
+    { horizonMonths, trials: 1000, withdrawalRate, inflationRate },
+    '[Forecasting] Running Monte Carlo'
   );
 
   // ── Historical net worth ─────────────────────────────────────────────────
-  const histRes = await query(
-    `SELECT net_worth, snapshot_date
-     FROM net_worth_snapshots
-     ORDER BY snapshot_date ASC`
-  );
+  const histRes = userId
+    ? await query(
+        `SELECT net_worth, snapshot_date FROM net_worth_snapshots WHERE user_id = $1 ORDER BY snapshot_date ASC`,
+        [userId]
+      )
+    : await query(`SELECT net_worth, snapshot_date FROM net_worth_snapshots ORDER BY snapshot_date ASC`);
 
   if (histRes.rows.length < 5) {
-    console.log('[Forecasting] Not enough data (need 5+ snapshots)');
+    logger.info('[Forecasting] Not enough data (need 5+ snapshots)');
     return;
   }
 
@@ -261,11 +264,18 @@ export async function runForecasting(
   const sigma             = monthlyVolatility(netWorths);
 
   // ── Expense average — 12-month lookback for stability ───────────────────
-  const expRes = await query(
-    `SELECT AVG((breakdown->>'monthlyExpenses')::numeric) as avg_exp
-     FROM net_worth_snapshots
-     WHERE snapshot_date >= CURRENT_DATE - '12 months'::interval`
-  );
+  const expRes = userId
+    ? await query(
+        `SELECT AVG((breakdown->>'monthlyExpenses')::numeric) as avg_exp
+         FROM net_worth_snapshots
+         WHERE user_id = $1 AND snapshot_date >= CURRENT_DATE - '12 months'::interval`,
+        [userId]
+      )
+    : await query(
+        `SELECT AVG((breakdown->>'monthlyExpenses')::numeric) as avg_exp
+         FROM net_worth_snapshots
+         WHERE snapshot_date >= CURRENT_DATE - '12 months'::interval`
+      );
   const avgMonthlyExpenses = parseFloat(expRes.rows[0]?.avg_exp ?? '0');
 
   // FI/RE number = annual expenses / withdrawal rate  (25× at 4%, 33× at 3%, etc.)
@@ -276,12 +286,20 @@ export async function runForecasting(
   // ── Separate liquid vs illiquid net worth ────────────────────────────────
   // Illiquid assets (real estate, vehicles, notes, business) cannot be
   // drawn down as monthly cash flow in retirement — exclude from MC target.
-  const illiquidRes = await query(
-    `SELECT COALESCE(SUM(current_value), 0) as illiquid_total
-     FROM manual_assets
-     WHERE is_active = true
-       AND asset_type IN ('real_estate', 'vehicle', 'note_receivable', 'note_payable', 'business')`
-  );
+  const illiquidRes = userId
+    ? await query(
+        `SELECT COALESCE(SUM(current_value), 0) as illiquid_total
+         FROM manual_assets
+         WHERE is_active = true AND user_id = $1
+           AND asset_type IN ('real_estate', 'vehicle', 'note_receivable', 'note_payable', 'business')`,
+        [userId]
+      )
+    : await query(
+        `SELECT COALESCE(SUM(current_value), 0) as illiquid_total
+         FROM manual_assets
+         WHERE is_active = true
+           AND asset_type IN ('real_estate', 'vehicle', 'note_receivable', 'note_payable', 'business')`
+      );
   const illiquidTotal  = parseFloat(illiquidRes.rows[0]?.illiquid_total ?? '0');
   const liquidNetWorth = Math.max(0, latest - illiquidTotal);
 
@@ -354,17 +372,31 @@ export async function runForecasting(
     mc_sustainabilityRate,
   };
 
-  await query(
-    `INSERT INTO forecast_snapshots (horizon_months, scenarios, summary)
-     VALUES ($1, $2, $3)`,
-    [horizonMonths, JSON.stringify(scenarios), JSON.stringify(summary)]
-  );
+  if (userId) {
+    await query(
+      `INSERT INTO forecast_snapshots (user_id, horizon_months, scenarios, summary)
+       VALUES ($1, $2, $3, $4)`,
+      [userId, horizonMonths, JSON.stringify(scenarios), JSON.stringify(summary)]
+    );
+  } else {
+    await query(
+      `INSERT INTO forecast_snapshots (horizon_months, scenarios, summary)
+       VALUES ($1, $2, $3)`,
+      [horizonMonths, JSON.stringify(scenarios), JSON.stringify(summary)]
+    );
+  }
 
-  console.log(
-    `[Forecasting] Done. Liquid $${liquidNetWorth.toLocaleString()} | ` +
-    `Illiquid $${illiquidTotal.toLocaleString()} | ` +
-    `FI/RE $${Math.round(fireNumber).toLocaleString()} (${(withdrawalRate * 100).toFixed(2)}% rule) | ` +
-    `MC hit ${mc.fireProbability}% | 30yr sustain ${mc_sustainabilityRate ?? 'N/A'}% | ` +
-    `liquid σ $${Math.round(liquidSigma).toLocaleString()}/mo (total σ $${Math.round(sigma).toLocaleString()}/mo)`
+  logger.info(
+    {
+      liquidNetWorth: Math.round(liquidNetWorth),
+      illiquidNetWorth: Math.round(illiquidTotal),
+      fireNumber: Math.round(fireNumber),
+      withdrawalRate,
+      mcFireProbability: mc.fireProbability,
+      sustainabilityRate: mc_sustainabilityRate,
+      liquidSigma: Math.round(liquidSigma),
+      totalSigma: Math.round(sigma),
+    },
+    '[Forecasting] Done'
   );
 }

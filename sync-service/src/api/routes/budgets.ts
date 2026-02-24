@@ -21,7 +21,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const budgets = await getBudgets();
     res.json({ data: budgets });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch budgets', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch budgets' });
   }
 });
 
@@ -30,7 +30,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const budget = await getBudget(String(req.params.id));
     res.json({ data: budget });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch budget', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch budget' });
   }
 });
 
@@ -41,7 +41,7 @@ router.post('/', async (req: Request, res: Response) => {
     const budget = await createBudget({ name, active, auto_budget_type, auto_budget_amount, auto_budget_period });
     res.status(201).json({ data: budget });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create budget', details: String(err) });
+    res.status(500).json({ error: 'Failed to create budget' });
   }
 });
 
@@ -50,7 +50,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const budget = await updateBudget(String(req.params.id), req.body);
     res.json({ data: budget });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update budget', details: String(err) });
+    res.status(500).json({ error: 'Failed to update budget' });
   }
 });
 
@@ -59,7 +59,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await deleteBudget(String(req.params.id));
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete budget', details: String(err) });
+    res.status(500).json({ error: 'Failed to delete budget' });
   }
 });
 
@@ -72,7 +72,7 @@ router.get('/:id/limits', async (req: Request, res: Response) => {
     const limits = await getBudgetLimits(String(req.params.id), start, end);
     res.json({ data: limits });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch budget limits', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch budget limits' });
   }
 });
 
@@ -83,7 +83,7 @@ router.post('/:id/limits', async (req: Request, res: Response) => {
     const limit = await createBudgetLimit(String(req.params.id), { start, end, amount, currency_id });
     res.status(201).json({ data: limit });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create budget limit', details: String(err) });
+    res.status(500).json({ error: 'Failed to create budget limit' });
   }
 });
 
@@ -92,7 +92,7 @@ router.put('/:id/limits/:limitId', async (req: Request, res: Response) => {
     const limit = await updateBudgetLimit(String(req.params.id), String(req.params.limitId), req.body);
     res.json({ data: limit });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update budget limit', details: String(err) });
+    res.status(500).json({ error: 'Failed to update budget limit' });
   }
 });
 
@@ -101,7 +101,7 @@ router.delete('/:id/limits/:limitId', async (req: Request, res: Response) => {
     await deleteBudgetLimit(String(req.params.id), String(req.params.limitId));
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete budget limit', details: String(err) });
+    res.status(500).json({ error: 'Failed to delete budget limit' });
   }
 });
 
@@ -116,7 +116,7 @@ router.get('/:id/transactions', async (req: Request, res: Response) => {
     const txns = await getBudgetTransactions(String(req.params.id), start, end, page, limit);
     res.json({ data: txns });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch budget transactions', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch budget transactions' });
   }
 });
 

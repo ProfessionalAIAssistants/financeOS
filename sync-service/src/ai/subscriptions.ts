@@ -1,8 +1,9 @@
 import { query } from '../db/client';
 import { evaluateAlertRules } from '../alerts/rules';
+import logger from '../lib/logger';
 
-export async function detectSubscriptions(): Promise<void> {
-  console.log('[Subscriptions] Starting detection...');
+export async function detectSubscriptions(userId?: string): Promise<void> {
+  logger.info({ userId }, '[Subscriptions] Starting detection');
   try {
     // Get 13 months of transactions grouped by merchant
     const txns = await query(`
@@ -18,8 +19,8 @@ export async function detectSubscriptions(): Promise<void> {
     `);
     // Note: In production this queries Firefly transactions via API
     // For now we detect from what's been imported into our tracking tables
-    console.log('[Subscriptions] Detection complete (requires Firefly transaction data)');
+    logger.info('[Subscriptions] Detection complete (requires Firefly transaction data)');
   } catch (err) {
-    console.error('[Subscriptions] Error:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[Subscriptions] Error');
   }
 }

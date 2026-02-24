@@ -1,20 +1,134 @@
 import axios from 'axios';
 
+const ACCESS_KEY = 'financeOS.accessToken';
+const REFRESH_KEY = 'financeOS.refreshToken';
+
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (err: unknown) => void;
+}> = [];
+
+function processQueue(err: unknown, token: string | null) {
+  failedQueue.forEach(p => (err ? p.reject(err) : p.resolve(token!)));
+  failedQueue = [];
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true, // Send httpOnly cookies automatically
 });
 
+// Attach access token to every request (localStorage fallback for migration)
+api.interceptors.request.use(cfg => {
+  const token = localStorage.getItem(ACCESS_KEY);
+  if (token && cfg.headers) {
+    cfg.headers.Authorization = `Bearer ${token}`;
+  }
+  return cfg;
+});
+
+// On 401: attempt silent token refresh, then retry the original request
 api.interceptors.response.use(
   r => r,
-  err => {
-    console.error('[API]', err.config?.url, err.response?.status, err.message);
-    return Promise.reject(err);
+  async err => {
+    const original = err.config;
+    if (
+      err.response?.status !== 401 ||
+      original._retry ||
+      original.url?.includes('/auth/')
+    ) {
+      return Promise.reject(err);
+    }
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      }).then(token => {
+        if (token) original.headers.Authorization = `Bearer ${token}`;
+        return api(original);
+      });
+    }
+
+    original._retry = true;
+    isRefreshing = true;
+
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+
+    try {
+      // Refresh via cookie (httpOnly) or body fallback
+      const res = await axios.post('/api/auth/refresh',
+        refreshToken ? { refreshToken } : {},
+        { withCredentials: true }
+      );
+      const { accessToken: newAt, refreshToken: newRt } = res.data as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      // Store tokens in localStorage as fallback (server also sets httpOnly cookies)
+      if (newAt) localStorage.setItem(ACCESS_KEY, newAt);
+      if (newRt) localStorage.setItem(REFRESH_KEY, newRt);
+      api.defaults.headers.common.Authorization = `Bearer ${newAt}`;
+      processQueue(null, newAt);
+      original.headers.Authorization = `Bearer ${newAt}`;
+      return api(original);
+    } catch (refreshErr) {
+      processQueue(refreshErr, null);
+      localStorage.removeItem(ACCESS_KEY);
+      localStorage.removeItem(REFRESH_KEY);
+      window.location.href = '/login';
+      return Promise.reject(refreshErr);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 
 export default api;
+
+// ── Plaid ─────────────────────────────────────────────────────────────────────
+export const plaidApi = {
+  createLinkToken: (itemId?: string) =>
+    api.post('/plaid/link-token', { itemId }).then(r => r.data as { linkToken: string; expiration: string }),
+  exchange: (publicToken: string, institutionId?: string, institutionName?: string) =>
+    api.post('/plaid/exchange', { publicToken, institutionId, institutionName }).then(r => r.data),
+  items: () =>
+    api.get('/plaid/items').then(r => r.data.data ?? []),
+  syncItem: (itemId: string) =>
+    api.post(`/plaid/sync/${itemId}`).then(r => r.data),
+  syncAll: () =>
+    api.post('/plaid/sync-all').then(r => r.data),
+  deleteItem: (itemId: string) =>
+    api.delete(`/plaid/items/${itemId}`).then(r => r.data),
+  transactions: (page = 1, limit = 50) =>
+    api.get('/plaid/transactions', { params: { page, limit } }).then(r => r.data),
+  updateAccount: (accountId: string, data: { hidden: boolean }) =>
+    api.patch(`/plaid/accounts/${accountId}`, data).then(r => r.data),
+};
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+// Note: register/login/refresh use plain fetch (no auth header needed).
+// These helpers wrap the /api/auth endpoints for convenience.
+export const authApi = {
+  me: () => api.get('/auth/me').then(r => r.data),
+  updateProfile: (data: { name?: string; email?: string }) =>
+    api.put('/auth/me', data).then(r => r.data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.put('/auth/password', data).then(r => r.data),
+  logout: (refreshToken?: string) =>
+    api.post('/auth/logout', { refreshToken }).then(r => r.data),
+};
+
+// ── Billing ───────────────────────────────────────────────────────────────────
+export const billingApi = {
+  plans: () => api.get('/billing/plans').then(r => r.data),
+  checkout: (planId: string) =>
+    api.post('/billing/checkout', { planId }).then(r => r.data as { url: string }),
+  portal: () =>
+    api.post('/billing/portal').then(r => r.data as { url: string }),
+};
 
 // ── Net Worth ────────────────────────────────────────────────────────────────
 export const networthApi = {

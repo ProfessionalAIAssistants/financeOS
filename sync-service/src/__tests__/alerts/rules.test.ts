@@ -15,7 +15,7 @@ jest.mock('../../alerts/ntfy', () => ({ createAlert: mockCreateAlert }));
 import { evaluateAlertRules, AlertEvent } from '../../alerts/rules';
 
 // Helper: make the DB return a set of rules
-function withRules(rules: Array<{ rule_type: string; threshold?: number; severity?: string }>) {
+function withRules(rules: Array<{ rule_type: string; threshold?: number; severity?: string; user_id?: string; notify_push?: boolean }>) {
   mockQuery.mockResolvedValue({ rows: rules });
 }
 

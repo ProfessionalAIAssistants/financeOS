@@ -30,7 +30,7 @@ router.get('/meta/accounts', async (_req: Request, res: Response) => {
     });
     res.json({ data: simplified });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch accounts', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch accounts' });
   }
 });
 
@@ -44,7 +44,7 @@ router.get('/meta/categories', async (_req: Request, res: Response) => {
     }));
     res.json({ data: simplified });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch categories', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
 
@@ -56,7 +56,7 @@ router.post('/meta/categories', async (req: Request, res: Response) => {
     const cat = await createCategory(name);
     res.status(201).json({ data: { id: cat.id, name: (cat.attributes as Record<string, unknown>)?.name } });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create category', details: String(err) });
+    res.status(500).json({ error: 'Failed to create category' });
   }
 });
 
@@ -103,7 +103,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     res.json({ data: flat });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch transactions', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch transactions' });
   }
 });
 
@@ -113,7 +113,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const txn = await getTransaction(String(req.params.id));
     res.json({ data: txn });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch transaction', details: String(err) });
+    res.status(500).json({ error: 'Failed to fetch transaction' });
   }
 });
 
@@ -149,7 +149,7 @@ router.post('/', async (req: Request, res: Response) => {
     const result = await createTransaction(payload);
     res.status(201).json({ data: result });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create transaction', details: String(err) });
+    res.status(500).json({ error: 'Failed to create transaction' });
   }
 });
 
@@ -182,7 +182,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const result = await updateTransaction(String(req.params.id), payload);
     res.json({ data: result });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update transaction', details: String(err) });
+    res.status(500).json({ error: 'Failed to update transaction' });
   }
 });
 
@@ -192,7 +192,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await deleteTransaction(String(req.params.id));
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete transaction', details: String(err) });
+    res.status(500).json({ error: 'Failed to delete transaction' });
   }
 });
 

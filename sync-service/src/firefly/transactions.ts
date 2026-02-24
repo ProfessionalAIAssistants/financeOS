@@ -1,5 +1,6 @@
 import { createTransaction, getTransactions } from './client';
 import { query } from '../db/client';
+import logger from '../lib/logger';
 
 export interface RawTransaction {
   id?: string;
@@ -101,7 +102,7 @@ export async function upsertTransactions(
       if (err instanceof Error && err.message?.includes('duplicate')) {
         skipped++;
       } else {
-        console.error(`[Transactions] Failed to import ${externalId}:`, err instanceof Error ? err.message : err);
+        logger.error({ err, externalId }, '[Transactions] Failed to import');
         skipped++;
       }
     }

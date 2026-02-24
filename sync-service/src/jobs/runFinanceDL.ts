@@ -2,10 +2,11 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { query } from '../db/client';
 import { evaluateAlertRules } from '../alerts/rules';
+import logger from '../lib/logger';
 
 export async function runFinanceDL(institutions: string[] = ['capitalone', 'macu', 'm1finance']): Promise<void> {
   for (const inst of institutions) {
-    console.log(`[finance-dl] Running for ${inst}...`);
+    logger.info({ institution: inst }, 'Running finance-dl');
     await query(
       `INSERT INTO sync_log (institution_name, sync_method, status, started_at)
        VALUES ($1, 'finance_dl', 'running', now())`,
@@ -43,14 +44,14 @@ function runForInstitution(institution: string): Promise<boolean> {
 
     const timer = setTimeout(() => {
       proc.kill();
-      console.error(`[finance-dl] ${institution} timed out`);
+      logger.error({ institution }, 'finance-dl timed out');
       resolve(false);
     }, 300000);
 
     proc.on('close', (code) => {
       clearTimeout(timer);
       if (code !== 0) {
-        console.error(`[finance-dl] ${institution} exit ${code}: ${stderr}`);
+        logger.error({ institution, exitCode: code, stderr }, 'finance-dl failed');
         resolve(false);
       } else {
         resolve(true);

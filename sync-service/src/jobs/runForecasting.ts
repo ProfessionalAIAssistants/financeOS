@@ -1,11 +1,12 @@
 import { runForecasting } from '../ai/forecasting';
+import logger from '../lib/logger';
 
 export async function runForecastingJob(): Promise<void> {
-  console.log('[Job] Running forecasting...');
+  logger.info('Running forecasting job');
   try {
     await runForecasting(12);
     await runForecasting(60);
   } catch (err) {
-    console.error('[Job] Forecasting error:', err instanceof Error ? err.message : err);
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Forecasting job error');
   }
 }

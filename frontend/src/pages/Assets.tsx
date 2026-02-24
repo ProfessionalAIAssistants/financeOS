@@ -8,6 +8,7 @@ import { Modal, ModalFooter } from '../components/ui/Modal';
 import { PageSpinner } from '../components/ui/Spinner';
 import { fmt, gradientForType } from '../lib/utils';
 import { Plus, Home, Car, FileText, Trash2 } from 'lucide-react';
+import { useToast } from '../components/ui/Toast';
 import { motion } from 'framer-motion';
 
 type AssetType = 'real_estate' | 'vehicle' | 'note' | 'other';
@@ -54,6 +55,7 @@ interface NewAssetForm {
 
 export function Assets() {
   const qc = useQueryClient();
+  const toast = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<NewAssetForm>({
     asset_type: 'real_estate', name: '', purchase_price: '', current_value: '',
@@ -66,11 +68,13 @@ export function Assets() {
   const createMutation = useMutation({
     mutationFn: assetsApi.create,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['assets'] }); setAddOpen(false); },
+    onError: () => toast.error('Failed to create asset'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => assetsApi.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+    onError: () => toast.error('Failed to delete asset'),
   });
 
   const totalValue = assets.reduce((s: number, a: Asset) => s + parseFloat(a.current_value ?? '0'), 0);

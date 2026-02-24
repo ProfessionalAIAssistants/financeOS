@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '../hooks/useQuery';
 import { alertsApi } from '../lib/api';
 
-
+import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { PageSpinner } from '../components/ui/Spinner';
 import { fmtRelative, severityColor } from '../lib/utils';
@@ -30,6 +30,7 @@ interface AlertRule {
 
 export function Alerts() {
   const qc = useQueryClient();
+  const toast = useToast();
   const [tab, setTab] = useState<'history' | 'rules'>('history');
 
   const { data: alerts = [], isLoading } = useQuery(['alerts'], () => alertsApi.list(100));
@@ -38,18 +39,24 @@ export function Alerts() {
   const markAllMutation = useMutation({
     mutationFn: alertsApi.markAllRead,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
+    onError: () => toast.error('Failed to mark alerts as read'),
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => alertsApi.markRead(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
+    onError: () => toast.error('Failed to mark alert as read'),
   });
 
-  const testMutation = useMutation({ mutationFn: alertsApi.test });
+  const testMutation = useMutation({
+    mutationFn: alertsApi.test,
+    onError: () => toast.error('Test alert failed'),
+  });
 
   const toggleRuleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => alertsApi.updateRule(id, { enabled }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alert-rules'] }),
+    onError: () => toast.error('Failed to update alert rule'),
   });
 
   if (isLoading) return <PageSpinner />;

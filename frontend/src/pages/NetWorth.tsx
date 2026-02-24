@@ -9,12 +9,14 @@ import { PageSpinner } from '../components/ui/Spinner';
 import { fmt, fmtDate, pctChange } from '../lib/utils';
 import { Camera } from 'lucide-react';
 import { useMutation, useQueryClient } from '../hooks/useQuery';
+import { useToast } from '../components/ui/Toast';
 
 const RANGES = [30, 90, 180, 365] as const;
 
 export function NetWorth() {
   const [days, setDays] = useState<typeof RANGES[number]>(365);
   const qc = useQueryClient();
+  const toast = useToast();
 
   const { data: current, isLoading } = useQuery(['nw-current'], networthApi.current);
   const { data: history = [] } = useQuery(['nw-history', days], () => networthApi.history(days));
@@ -23,6 +25,7 @@ export function NetWorth() {
   const snapMutation = useMutation({
     mutationFn: networthApi.snapshot,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['nw-current'] }),
+    onError: () => toast.error('Snapshot failed. Please try again.'),
   });
 
   if (isLoading) return <PageSpinner />;
@@ -85,6 +88,11 @@ export function NetWorth() {
       {/* Area chart */}
       <Card>
         <CardHeader><CardTitle>Net Worth Over Time</CardTitle></CardHeader>
+        {chartData.length === 0 ? (
+          <div className="h-64 flex items-center justify-center">
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No history yet — take a snapshot to start tracking.</p>
+          </div>
+        ) : (
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -113,6 +121,7 @@ export function NetWorth() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
       </Card>
 
       {/* Breakdown bar */}

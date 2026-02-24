@@ -2,18 +2,28 @@ import OpenAI from 'openai';
 import { config } from '../config';
 import { query } from '../db/client';
 import { createAlert } from '../alerts/ntfy';
+import logger from '../lib/logger';
 
-export async function generateMonthlyInsights(year: number, month: number): Promise<void> {
-  console.log(`[Insights] Generating for ${year}-${month}`);
+export async function generateMonthlyInsights(year: number, month: number, userId?: string): Promise<void> {
+  logger.info({ year, month, userId }, '[Insights] Generating');
 
   // Get net worth snapshot for that month (including breakdown JSON)
-  const nwRes = await query(
-    `SELECT net_worth, total_assets, total_liabilities, breakdown
-     FROM net_worth_snapshots
-     WHERE DATE_TRUNC('month', snapshot_date) = $1
-     ORDER BY snapshot_date DESC LIMIT 1`,
-    [`${year}-${String(month).padStart(2, '0')}-01`]
-  );
+  const dateParam = `${year}-${String(month).padStart(2, '0')}-01`;
+  const nwRes = userId
+    ? await query(
+        `SELECT net_worth, total_assets, total_liabilities, breakdown
+         FROM net_worth_snapshots
+         WHERE user_id = $1 AND DATE_TRUNC('month', snapshot_date) = $2
+         ORDER BY snapshot_date DESC LIMIT 1`,
+        [userId, dateParam]
+      )
+    : await query(
+        `SELECT net_worth, total_assets, total_liabilities, breakdown
+         FROM net_worth_snapshots
+         WHERE DATE_TRUNC('month', snapshot_date) = $1
+         ORDER BY snapshot_date DESC LIMIT 1`,
+        [dateParam]
+      );
 
   const nw = nwRes.rows[0];
   const breakdown = nw?.breakdown as Record<string, unknown> | undefined;
@@ -63,7 +73,7 @@ export async function generateMonthlyInsights(year: number, month: number): Prom
       });
       narrative = resp.choices[0].message.content ?? '';
     } catch (err) {
-      console.error('[Insights] OpenAI error:', err instanceof Error ? err.message : err);
+      logger.error({ err }, '[Insights] OpenAI error');
     }
   }
 
@@ -86,5 +96,5 @@ export async function generateMonthlyInsights(year: number, month: number): Prom
     metadata: { stats, narrative },
   }, true);
 
-  console.log('[Insights] Done');
+  logger.info('[Insights] Done');
 }

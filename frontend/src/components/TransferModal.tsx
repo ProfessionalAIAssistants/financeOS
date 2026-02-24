@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { transactionsApi } from '../lib/api';
 import { fmt } from '../lib/utils';
 import { ArrowRight } from 'lucide-react';
+import { useToast } from './ui/Toast';
 
 interface Account {
   id: string;
@@ -32,6 +33,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export function TransferModal({ open, onClose }: Props) {
   const qc = useQueryClient();
+  const toast = useToast();
 
   const [form, setForm] = useState({
     source_id: '',
@@ -55,12 +57,13 @@ export function TransferModal({ open, onClose }: Props) {
       setForm({ source_id: '', destination_id: '', amount: '', date: today(), description: 'Transfer', notes: '' });
       onClose();
     },
+    onError: () => toast.error('Transfer failed. Please try again.'),
   });
 
   function handleSubmit() {
     if (!form.source_id || !form.destination_id || !form.amount) return;
     if (form.source_id === form.destination_id) {
-      alert('Source and destination accounts must be different.');
+      toast.error('Source and destination accounts must be different.');
       return;
     }
     createMutation.mutate({

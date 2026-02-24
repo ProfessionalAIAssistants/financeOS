@@ -1,5 +1,6 @@
 import { getAccounts } from '../firefly/client';
 import { evaluateAlertRules } from '../alerts/rules';
+import logger from '../lib/logger';
 
 export async function refreshBalances(): Promise<void> {
   try {
@@ -16,6 +17,6 @@ export async function refreshBalances(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error('[RefreshBalances] Error:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[RefreshBalances] Error');
   }
 }

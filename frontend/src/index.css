@@ -88,6 +88,14 @@ html, body, #root {
 
   --skeleton-base:  rgba(255,255,255,0.06);
   --skeleton-shine: rgba(255,255,255,0.10);
+
+  /* Sidebar-specific (dark defaults match existing) */
+  --sidebar-text:           var(--text-primary);
+  --sidebar-text-muted:     var(--text-muted);
+  --sidebar-active-bg:      var(--bg-active-nav);
+  --sidebar-hover-bg:       var(--bg-hover-nav);
+  --sidebar-active-border:  var(--border-active);
+  --sidebar-logo-text:      var(--gradient-primary);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -107,7 +115,7 @@ html, body, #root {
   --bg-input-focus:   rgba(99, 102, 241, 0.09);
   --bg-overlay:       rgba(15, 23, 42, 0.5);
   --bg-badge:         rgba(99, 102, 241, 0.08);
-  --bg-sidebar:       rgba(255, 255, 255, 0.97);
+  --bg-sidebar:       linear-gradient(195deg, #6366f1 0%, #4f46e5 30%, #3b82f6 60%, #06b6d4 100%);
   --bg-topbar:        rgba(255, 255, 255, 0.95);
   --bg-tooltip:       rgba(15, 23, 42, 0.96);
   --bg-active-nav:    rgba(99, 102, 241, 0.1);
@@ -120,7 +128,7 @@ html, body, #root {
   --border-input:     rgba(99, 102, 241, 0.2);
   --border-focus:     rgba(99, 102, 241, 0.55);
   --border-card:      rgba(99, 102, 241, 0.12);
-  --border-sidebar:   rgba(99, 102, 241, 0.1);
+  --border-sidebar:   rgba(255, 255, 255, 0.15);
   --border-active:    rgba(99, 102, 241, 0.42);
 
   --text-primary:     #0f172a;
@@ -161,6 +169,14 @@ html, body, #root {
 
   --skeleton-base:  rgba(99,102,241,0.07);
   --skeleton-shine: rgba(99,102,241,0.13);
+
+  /* Sidebar-specific (light = white text on gradient) */
+  --sidebar-text:           #ffffff;
+  --sidebar-text-muted:     rgba(255, 255, 255, 0.72);
+  --sidebar-active-bg:      rgba(255, 255, 255, 0.2);
+  --sidebar-hover-bg:       rgba(255, 255, 255, 0.1);
+  --sidebar-active-border:  rgba(255, 255, 255, 0.3);
+  --sidebar-logo-text:      #ffffff;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -298,6 +314,13 @@ a { color: inherit; text-decoration: none; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Sidebar scrollbar — thin, only visible on hover */
+.scrollbar-sidebar::-webkit-scrollbar { width: 3px; }
+.scrollbar-sidebar::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-sidebar::-webkit-scrollbar-thumb { background: transparent; border-radius: 99px; }
+.scrollbar-sidebar:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
+.scrollbar-sidebar:hover::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ═══════════════════════════════════════════════════════════════
    MOBILE SAFE AREAS

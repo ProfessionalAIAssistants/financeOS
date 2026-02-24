@@ -5,17 +5,21 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { PageSpinner } from '../components/ui/Spinner';
 import { fmtRelative, iconForInstitution } from '../lib/utils';
-import { RefreshCw, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, Clock, Link2, Upload } from 'lucide-react';
 import { useMutation, useQueryClient } from '../hooks/useQuery';
 import { motion } from 'framer-motion';
+import { useToast } from '../components/ui/Toast';
+import { Link } from 'react-router-dom';
 
 export function Accounts() {
   const qc = useQueryClient();
+  const toast = useToast();
   const { data: status, isLoading } = useQuery(['sync-status'], syncApi.status);
 
   const syncMutation = useMutation({
     mutationFn: (inst: string | undefined) => syncApi.force(inst),
     onSuccess: () => setTimeout(() => qc.invalidateQueries({ queryKey: ['sync-status'] }), 5000),
+    onError: () => toast.error('Sync failed. Please try again.'),
   });
 
   if (isLoading) return <PageSpinner />;
@@ -45,6 +49,22 @@ export function Accounts() {
       </Card>
 
       {/* Institution cards */}
+      {institutions.length === 0 ? (
+        <Card>
+          <div className="py-12 text-center">
+            <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>No connected accounts yet</p>
+            <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>Link a bank or import transactions to get started.</p>
+            <div className="flex items-center justify-center gap-3">
+              <Link to="/linked-banks">
+                <Button variant="primary" icon={<Link2 className="w-4 h-4" />}>Link a Bank</Button>
+              </Link>
+              <Link to="/upload">
+                <Button variant="secondary" icon={<Upload className="w-4 h-4" />}>Import File</Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {institutions.map((inst: {
           name: string;
@@ -107,6 +127,7 @@ export function Accounts() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

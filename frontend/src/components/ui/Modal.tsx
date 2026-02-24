@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useEffect, useCallback, useRef } from 'react';
 
 interface ModalProps {
   open: boolean;
@@ -18,10 +19,25 @@ const sizes = {
 };
 
 export function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    document.addEventListener('keydown', handleKeyDown);
+    // Focus the dialog for keyboard accessibility
+    dialogRef.current?.focus();
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, handleKeyDown]);
+
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -34,11 +50,16 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
           {/* Dialog */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title ?? 'Dialog'}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.2 }}
-            className={cn('relative w-full glass p-6 z-10', sizes[size])}
+            className={cn('relative w-full glass p-6 z-10 outline-none', sizes[size])}
             style={{ background: 'var(--bg-modal)', boxShadow: 'var(--shadow-xl)' }}
           >
             {/* Header */}
@@ -49,6 +70,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
                 </h2>
                 <button
                   onClick={onClose}
+                  aria-label="Close"
                   className="p-1.5 rounded-lg transition-colors"
                   style={{ color: 'var(--text-muted)' }}
                   onMouseEnter={e => {
@@ -67,6 +89,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
             {!title && (
               <button
                 onClick={onClose}
+                aria-label="Close"
                 className="absolute top-4 right-4 p-1.5 rounded-lg transition-colors"
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={e => {

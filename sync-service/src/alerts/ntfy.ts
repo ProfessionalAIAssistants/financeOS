@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config';
 import { query } from '../db/client';
+import logger from '../lib/logger';
 
 export type AlertPriority = 'max' | 'high' | 'default' | 'low' | 'min';
 
@@ -12,6 +13,7 @@ export interface AlertPayload {
   ruleType?: string;
   severity?: string;
   metadata?: Record<string, unknown>;
+  userId?: string;
 }
 
 export async function sendPushNotification(payload: AlertPayload): Promise<void> {
@@ -26,16 +28,17 @@ export async function sendPushNotification(payload: AlertPayload): Promise<void>
       timeout: 8000,
     });
   } catch (err) {
-    console.error('[ntfy] Push failed:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[ntfy] Push failed');
   }
 }
 
 export async function createAlert(payload: AlertPayload, sendPush = true): Promise<void> {
   try {
     await query(
-      `INSERT INTO alert_history (rule_type, title, message, severity, metadata)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO alert_history (user_id, rule_type, title, message, severity, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
+        payload.userId ?? null,
         payload.ruleType ?? 'system',
         payload.title,
         payload.message,

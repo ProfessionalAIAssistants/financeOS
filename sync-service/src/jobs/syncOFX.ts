@@ -6,12 +6,13 @@ import { checkForAnomalies } from '../ai/anomaly';
 import { evaluateAlertRules } from '../alerts/rules';
 import { query } from '../db/client';
 import fs from 'fs';
+import logger from '../lib/logger';
 
 const failureCounts: Record<string, number> = {};
 
 export async function syncOFX(): Promise<void> {
   for (const institution of ['chase', 'usaa'] as const) {
-    console.log(`[OFX] Syncing ${institution}...`);
+    logger.info({ institution }, 'OFX sync starting');
     const started = Date.now();
 
     await query(
@@ -75,7 +76,7 @@ export async function syncOFX(): Promise<void> {
         // Archive processed file
         fs.renameSync(filePath, filePath + '.done');
       } catch (err) {
-        console.error(`[OFX] Error processing ${filePath}:`, err instanceof Error ? err.message : err);
+        logger.error({ filePath, err: err instanceof Error ? err.message : err }, 'OFX file processing error');
       }
     }
 
@@ -91,6 +92,6 @@ export async function syncOFX(): Promise<void> {
       [institution]
     ).catch(() => {});
 
-    console.log(`[OFX] ${institution}: +${totalAdded} transactions (${Date.now() - started}ms)`);
+    logger.info({ institution, added: totalAdded, durationMs: Date.now() - started }, 'OFX sync complete');
   }
 }

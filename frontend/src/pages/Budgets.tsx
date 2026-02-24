@@ -473,6 +473,7 @@ function BudgetFormModal({
 
 function BudgetLimitPanel({ budgetId, budgetName }: { budgetId: string; budgetName: string }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const [addLimitOpen, setAddLimitOpen] = useState(false);
   const [limitForm, setLimitForm] = useState({ start: '', end: '', amount: '' });
 
@@ -489,6 +490,7 @@ function BudgetLimitPanel({ budgetId, budgetName }: { budgetId: string; budgetNa
       setAddLimitOpen(false);
       setLimitForm({ start: '', end: '', amount: '' });
     },
+    onError: () => toast.error('Failed to create spending limit'),
   });
 
   const deleteLimitMutation = useMutation({
@@ -497,6 +499,7 @@ function BudgetLimitPanel({ budgetId, budgetName }: { budgetId: string; budgetNa
       qc.invalidateQueries({ queryKey: ['budget-limits', budgetId] });
       qc.invalidateQueries({ queryKey: ['budgets'] });
     },
+    onError: () => toast.error('Failed to delete spending limit'),
   });
 
   return (

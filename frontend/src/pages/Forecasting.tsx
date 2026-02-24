@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { PageSpinner } from '../components/ui/Spinner';
 import { fmt } from '../lib/utils';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
+import { useToast } from '../components/ui/Toast';
 import { Zap, TrendingUp, ChevronDown, ChevronUp, Info } from 'lucide-react';
 
 interface ScenarioPoint { month: number; netWorth: number; }
@@ -81,6 +82,7 @@ function buildPlainSummary(stored: ForecastSummary, liveFireNumber: number): str
 
 export function Forecasting() {
   const qc = useQueryClient();
+  const toast = useToast();
   const [horizon, setHorizon]           = useState(12);
   const [chartMode, setChartMode]       = useState<'montecarlo' | 'scenarios'>('montecarlo');
   const [viewMode, setViewMode]         = useState<'nominal' | 'real'>('nominal');
@@ -107,11 +109,13 @@ export function Forecasting() {
   const genMutation = useMutation({
     mutationFn: () => forecastApi.generate(horizon, withdrawalRate / 100, inflationRate / 100),
     onSuccess: () => setTimeout(() => qc.invalidateQueries({ queryKey: ['forecast'] }), 3000),
+    onError: () => toast.error('Forecast generation failed'),
   });
 
   const whatIfMutation = useMutation({
     mutationFn: () => forecastApi.whatif({ ...whatIf, horizon }),
     onSuccess: (data) => setWhatIfResult(data),
+    onError: () => toast.error('What-if analysis failed'),
   });
 
   if (isLoading) return <PageSpinner />;

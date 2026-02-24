@@ -6,6 +6,7 @@ import {
   deleteTag,
   getTagTransactions,
 } from '../../firefly/client';
+import logger from '../../lib/logger';
 
 const router = Router();
 
@@ -18,7 +19,8 @@ router.get('/', async (req: Request, res: Response) => {
     const tags = await getTags(page, limit);
     res.json({ data: tags });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch tags', details: String(err) });
+    logger.error({ err: err instanceof Error ? err.message : err }, 'GET /tags error');
+    res.status(500).json({ error: 'Failed to fetch tags' });
   }
 });
 
@@ -29,7 +31,8 @@ router.post('/', async (req: Request, res: Response) => {
     const created = await createTag({ tag, description, date });
     res.status(201).json({ data: created });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create tag', details: String(err) });
+    logger.error({ err: err instanceof Error ? err.message : err }, 'POST /tags error');
+    res.status(500).json({ error: 'Failed to create tag' });
   }
 });
 
@@ -39,7 +42,8 @@ router.put('/:tag', async (req: Request, res: Response) => {
     const updated = await updateTag(String(req.params.tag), { tag, description });
     res.json({ data: updated });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update tag', details: String(err) });
+    logger.error({ err: err instanceof Error ? err.message : err }, 'PUT /tags error');
+    res.status(500).json({ error: 'Failed to update tag' });
   }
 });
 
@@ -48,7 +52,8 @@ router.delete('/:tag', async (req: Request, res: Response) => {
     await deleteTag(String(req.params.tag));
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete tag', details: String(err) });
+    logger.error({ err: err instanceof Error ? err.message : err }, 'DELETE /tags error');
+    res.status(500).json({ error: 'Failed to delete tag' });
   }
 });
 
@@ -61,7 +66,8 @@ router.get('/:tag/transactions', async (req: Request, res: Response) => {
     const txns = await getTagTransactions(String(req.params.tag), page, limit);
     res.json({ data: txns });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch tag transactions', details: String(err) });
+    logger.error({ err: err instanceof Error ? err.message : err }, 'GET /tags/:tag/transactions error');
+    res.status(500).json({ error: 'Failed to fetch tag transactions' });
   }
 });
 

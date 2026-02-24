@@ -1,10 +1,11 @@
 import { detectSubscriptions } from '../ai/subscriptions';
+import logger from '../lib/logger';
 
 export async function runDetectSubscriptions(): Promise<void> {
-  console.log('[Job] Running subscription detection...');
+  logger.info('[Job] Running subscription detection...');
   try {
     await detectSubscriptions();
   } catch (err) {
-    console.error('[Job] Subscription detection error:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[Job] Subscription detection error');
   }
 }

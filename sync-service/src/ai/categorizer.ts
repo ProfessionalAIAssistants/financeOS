@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { config } from '../config';
 import { query } from '../db/client';
+import logger from '../lib/logger';
 
 const CATEGORIES = [
   'groceries', 'dining', 'gas', 'utilities', 'rent/mortgage', 'insurance',
@@ -52,7 +53,7 @@ export async function categorizeTransactions(transactions: TxInput[]): Promise<M
         continue;
       }
     } catch (err) {
-      console.warn('[Categorizer] DB cache lookup failed:', err instanceof Error ? err.message : err);
+      logger.warn({ err }, '[Categorizer] DB cache lookup failed');
     }
 
     // Rule-based fallback
@@ -101,7 +102,7 @@ export async function categorizeTransactions(transactions: TxInput[]): Promise<M
       await cacheMerchant(needsAI[i].description, valid, 'ai');
     }
   } catch (err) {
-    console.error('[Categorizer] AI batch failed:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[Categorizer] AI batch failed');
     for (const tx of needsAI) results.set(tx.id, 'other');
   }
 
@@ -116,6 +117,6 @@ async function cacheMerchant(merchant: string, category: string, source: string)
       [merchant.toLowerCase().trim(), category, source]
     );
   } catch (err) {
-    console.warn('[Categorizer] Failed to cache merchant:', err instanceof Error ? err.message : err);
+    logger.warn({ err }, '[Categorizer] Failed to cache merchant');
   }
 }

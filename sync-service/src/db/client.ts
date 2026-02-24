@@ -1,15 +1,16 @@
 import { Pool, PoolClient } from 'pg';
 import { config } from '../config';
+import logger from '../lib/logger';
 
 const pool = new Pool({
   connectionString: config.databaseUrl,
-  max: 10,
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
 
 pool.on('error', (err) => {
-  console.error('[DB] Pool error:', err.message);
+  logger.error({ err: err.message }, 'DB pool error');
 });
 
 export async function query(sql: string, params: unknown[] = []) {
@@ -47,4 +48,9 @@ export async function testConnection(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Close the pool — called during graceful shutdown */
+export async function closePool(): Promise<void> {
+  await pool.end();
 }

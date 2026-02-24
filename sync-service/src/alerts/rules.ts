@@ -1,8 +1,10 @@
 import { query } from '../db/client';
 import { createAlert } from './ntfy';
+import logger from '../lib/logger';
 
 export interface AlertEvent {
   type: string;
+  userId?: string;
   institution?: string;
   accountName?: string;
   amount?: number;
@@ -14,8 +16,9 @@ export interface AlertEvent {
 export async function evaluateAlertRules(event: AlertEvent): Promise<void> {
   try {
     const rules = await query(
-      'SELECT * FROM alert_rules WHERE enabled = true AND rule_type = $1',
-      [event.type]
+      `SELECT id, user_id, rule_type, name, threshold, account_filter, category_filter, enabled, notify_push
+       FROM alert_rules WHERE enabled = true AND rule_type = $1 AND ($2::uuid IS NULL OR user_id = $2)`,
+      [event.type, event.userId ?? null]
     );
 
     for (const rule of rules.rows) {
@@ -90,10 +93,11 @@ export async function evaluateAlertRules(event: AlertEvent): Promise<void> {
           ruleType: event.type,
           severity,
           metadata: event.metadata,
+          userId: event.userId ?? rule.user_id,
         }, rule.notify_push !== false);
       }
     }
   } catch (err) {
-    console.error('[AlertRules] Error:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[AlertRules] Error');
   }
 }

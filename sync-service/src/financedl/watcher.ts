@@ -10,6 +10,7 @@ import { upsertAccount } from '../firefly/accounts';
 import { query } from '../db/client';
 import { checkForAnomalies } from '../ai/anomaly';
 import { config } from '../config';
+import logger from '../lib/logger';
 
 const EXTENSIONS = ['.ofx', '.qfx', '.csv'];
 
@@ -29,7 +30,7 @@ async function processFile(filePath: string): Promise<void> {
 
   if (!EXTENSIONS.includes(ext)) return;
 
-  console.log(`[Watcher] ${institution}: ${path.basename(filePath)}`);
+  logger.info({ institution, file: path.basename(filePath) }, '[Watcher] Processing file');
 
   try {
     let transactions: Array<{ id?: string; date: string; name: string; amount: number }> = [];
@@ -80,10 +81,10 @@ async function processFile(filePath: string): Promise<void> {
       [institution, added]
     ).catch(() => {});
 
-    console.log(`[Watcher] +${added} transactions`);
+    logger.info({ institution, added }, '[Watcher] Transactions added');
     archive(filePath);
   } catch (err) {
-    console.error('[Watcher] Error:', err instanceof Error ? err.message : err);
+    logger.error({ err }, '[Watcher] Error');
   }
 }
 
@@ -113,7 +114,7 @@ export function startWatcher(downloadsDir = config.downloadsDir): void {
     }
   });
 
-  console.log(`[Watcher] Watching ${downloadsDir}`);
+  logger.info({ downloadsDir }, '[Watcher] Watching directory');
 }
 
 export function stopWatcher(): void {

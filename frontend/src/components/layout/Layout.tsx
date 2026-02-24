@@ -17,6 +17,8 @@ const pageTitles: Record<string, string> = {
   '/insights':      'AI Insights',
   '/alerts':        'Alerts',
   '/upload':        'Import Data',
+  '/linked-banks':  'Linked Banks',
+  '/billing':       'Plans & Billing',
   '/settings':      'Settings',
 };
 
@@ -28,7 +30,7 @@ export function Layout() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       {/* Desktop sidebar */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex h-full">
         <Sidebar />
       </div>
 

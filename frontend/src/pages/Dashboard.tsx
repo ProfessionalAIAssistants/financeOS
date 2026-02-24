@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Wallet, PiggyBank, ShieldCheck, Percent } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, PiggyBank, ShieldCheck, Percent, Upload as UploadIcon, Link2, ArrowRight } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -38,6 +38,8 @@ export function Dashboard() {
   const assets      = parseFloat(current?.total_assets ?? '0');
   const liabilities = parseFloat(current?.total_liabilities ?? '0');
 
+  const isEmpty = netWorth === 0 && assets === 0 && liabilities === 0 && history.length === 0;
+
   const monthlyIncome   = parseFloat(current?.breakdown?.monthlyIncome   ?? '0');
   const monthlyExpenses = parseFloat(current?.breakdown?.monthlyExpenses ?? '0');
   const savingsRate     = monthlyIncome > 0
@@ -66,6 +68,50 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
+
+      {/* Onboarding — shown when no data exists */}
+      {isEmpty && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass p-6 md:p-8 relative overflow-hidden"
+        >
+          <div className="absolute inset-0 opacity-30 pointer-events-none"
+            style={{ background: 'var(--gradient-primary)' }} />
+          <div className="relative">
+            <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+              Welcome to FinanceOS 👋
+            </h2>
+            <p className="text-sm mb-6 max-w-lg" style={{ color: 'var(--text-secondary)' }}>
+              Get started by connecting your bank accounts or importing transaction data.
+              Once you have data flowing, this dashboard will show your net worth, spending trends, AI insights, and more.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/linked-banks">
+                <button
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-[1.02]"
+                  style={{ background: 'var(--gradient-primary)', boxShadow: 'var(--shadow-glow)' }}
+                >
+                  <Link2 className="w-4 h-4" /> Link Bank Account <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </Link>
+              <Link to="/upload">
+                <button
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-strong)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <UploadIcon className="w-4 h-4" /> Import CSV / OFX
+                </button>
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Hero gradient */}
       <div className="relative overflow-hidden glass p-6 md:p-8">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-violet-600/10 to-transparent pointer-events-none" />

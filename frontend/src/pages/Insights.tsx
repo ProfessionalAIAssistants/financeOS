@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from '../hooks/useQuery';
 import { insightsApi } from '../lib/api';
 
+import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { PageSpinner } from '../components/ui/Spinner';
 import { fmt, fmtDate } from '../lib/utils';
@@ -16,10 +17,12 @@ interface Insight {
 }
 
 export function Insights() {
+  const toast = useToast();
   const { data: insights = [], isLoading } = useQuery(['insights'], insightsApi.list);
 
   const genMutation = useMutation({
     mutationFn: () => insightsApi.generate(),
+    onError: () => toast.error('Failed to generate insights'),
   });
 
   if (isLoading) return <PageSpinner />;

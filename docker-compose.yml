@@ -13,7 +13,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
     ports:
-      - "57432:5432"
+      - "127.0.0.1:57432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-financeos} -d ${POSTGRES_DB:-financeos}"]
       interval: 10s
@@ -89,6 +89,17 @@ services:
       M1_PASSWORD: ${M1_PASSWORD}
       DOWNLOADS_DIR: /app/downloads
       TZ: ${TZ:-America/Denver}
+      # ── Auth / SaaS ──────────────────────────────────────────────────────
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-${JWT_SECRET}}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      APP_URL: ${APP_URL:-http://localhost:57072}
+      # ── Stripe ───────────────────────────────────────────────────────────
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID}
+      STRIPE_LIFETIME_PRICE_ID: ${STRIPE_LIFETIME_PRICE_ID}
     volumes:
       - ./downloads:/app/downloads
       - ./uploads:/app/uploads
@@ -118,13 +129,16 @@ services:
       retries: 3
 
   # ── Adminer (DB admin UI) ────────────────────────────────────────────────
+  # Only runs with: docker compose --profile dev up
   adminer:
     image: adminer:latest
     restart: unless-stopped
+    profiles:
+      - dev
     depends_on:
       - postgres
     ports:
-      - "57071:8080"
+      - "127.0.0.1:57071:8080"
     environment:
       ADMINER_DEFAULT_SERVER: postgres
 
@@ -141,6 +155,51 @@ services:
       - ntfy_data:/var/lib/ntfy
     ports:
       - "57073:80"
+
+  # ── Cloudflare Tunnel ────────────────────────────────────────────────────
+  # Get your token from https://one.dash.cloudflare.com/ → Zero Trust → Tunnels
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+
+  # ── Database Backup (daily pg_dump) ──────────────────────────────────────
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-financeos}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-financeos}
+    volumes:
+      - ./backups:/backups
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        echo "Backup service started — running daily at 2:00 AM"
+        while true; do
+          NEXT=$(date -d "tomorrow 02:00" +%s 2>/dev/null || date -v+1d -v2H -v0M -v0S +%s)
+          NOW=$(date +%s)
+          SLEEP=$((NEXT - NOW))
+          [ $$SLEEP -lt 0 ] && SLEEP=86400
+          sleep $$SLEEP
+          FNAME="/backups/financeos_$(date +%Y%m%d_%H%M%S).sql.gz"
+          echo "Starting backup: $$FNAME"
+          pg_dump --no-owner --no-acl | gzip > "$$FNAME"
+          echo "Backup complete: $$FNAME ($(du -h "$$FNAME" | cut -f1))"
+          # Keep only last 14 days of backups
+          find /backups -name "financeos_*.sql.gz" -mtime +14 -delete 2>/dev/null
+        done
 
 volumes:
   pgdata:

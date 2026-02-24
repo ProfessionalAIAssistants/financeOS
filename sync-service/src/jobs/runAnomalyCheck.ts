@@ -1,8 +1,9 @@
 import { getTransactions } from '../firefly/client';
 import { checkForAnomalies } from '../ai/anomaly';
+import logger from '../lib/logger';
 
 export async function runAnomalyCheck(): Promise<void> {
-  console.log('[Job] Running anomaly check...');
+  logger.info('Running anomaly check');
   try {
     const txns = await getTransactions(1, 100);
     if (!txns.length) return;
@@ -13,6 +14,6 @@ export async function runAnomalyCheck(): Promise<void> {
       date: t.attributes?.date ?? '',
     })));
   } catch (err) {
-    console.error('[Job] Anomaly check error:', err instanceof Error ? err.message : err);
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Anomaly check error');
   }
 }

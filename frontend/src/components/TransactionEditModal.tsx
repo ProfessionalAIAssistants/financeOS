@@ -124,6 +124,7 @@ export function TransactionEditModal({ transaction, open, onClose }: Props) {
       setShowNewCategory(false);
       setNewCategory('');
     },
+    onError: () => toast('Failed to create category', 'error'),
   });
 
   function addTag(tag: string) {

@@ -10,6 +10,8 @@ import { upsertTransactions } from '../../firefly/transactions';
 import { upsertAccount } from '../../firefly/accounts';
 import { query } from '../../db/client';
 import { categorizeTransactions } from '../../ai/categorizer';
+import { getUserId } from '../../middleware/auth';
+import logger from '../../lib/logger';
 
 const router = Router();
 
@@ -19,7 +21,9 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: uploadsDir,
   filename: (_req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
+    // Sanitize filename: remove path separators and null bytes
+    const safeName = file.originalname.replace(/[/\\:\0]/g, '_');
+    cb(null, `${Date.now()}-${safeName}`);
   },
 });
 
@@ -41,6 +45,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
   const ext = path.extname(originalName);
   const institution = (req.body.institution || 'manual').toLowerCase();
   const fileType = req.body.fileType || 'auto';
+  const userId = getUserId(req);
   try {
     let result: { added: number; skipped: number; institution: string };
     if (ext === '.ofx' || ext === '.qfx') {
@@ -103,25 +108,32 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Unsupported file format' });
     }
     await query(
-      `INSERT INTO sync_log (institution_name, sync_method, status, transactions_added, completed_at)
-       VALUES ($1, 'manual_upload', 'success', $2, now())`,
-      [result.institution, result.added]
+      `INSERT INTO sync_log (user_id, institution_name, sync_method, status, transactions_added, completed_at)
+       VALUES ($1, $2, 'manual_upload', 'success', $3, now())`,
+      [userId, result.institution, result.added]
     );
     fs.unlinkSync(filePath);
     res.json({ success: true, ...result,
       message: `Imported ${result.added} transactions (${result.skipped} duplicates skipped)` });
   } catch (err) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    console.error('[Upload] Error:', err);
-    res.status(500).json({ error: 'Failed to process file', details: String(err) });
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Upload processing error');
+    res.status(500).json({ error: 'Failed to process file' });
   }
 });
 
-router.get('/log', async (_req: Request, res: Response) => {
-  const result = await query(
-    `SELECT * FROM sync_log WHERE sync_method = 'manual_upload' ORDER BY completed_at DESC LIMIT 50`
-  );
-  res.json({ data: result.rows });
+router.get('/log', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const result = await query(
+      `SELECT id, user_id, institution_name, sync_method, status, transactions_added, error_message, completed_at FROM sync_log WHERE user_id = $1 AND sync_method = 'manual_upload' ORDER BY completed_at DESC LIMIT 50`,
+      [userId]
+    );
+    res.json({ data: result.rows });
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : err }, 'GET /upload/log error');
+    res.status(500).json({ error: 'Failed to fetch upload log' });
+  }
 });
 
 export default router;

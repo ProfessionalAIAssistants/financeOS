@@ -1,11 +1,81 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { config } from '../config';
+import logger from '../lib/logger';
+
+// ── Circuit breaker state ─────────────────────────────────────────────────────
+let circuitOpen = false;
+let failureCount = 0;
+let lastFailureTime = 0;
+const FAILURE_THRESHOLD = 5;
+const RESET_TIMEOUT_MS = 60_000; // 1 minute
+
+function checkCircuit(): void {
+  if (circuitOpen && Date.now() - lastFailureTime > RESET_TIMEOUT_MS) {
+    logger.info('Firefly circuit breaker: half-open, retrying');
+    circuitOpen = false;
+    failureCount = 0;
+  }
+  if (circuitOpen) {
+    throw new Error('Firefly circuit breaker is OPEN — service unavailable');
+  }
+}
+
+function recordSuccess(): void {
+  failureCount = 0;
+  if (circuitOpen) {
+    circuitOpen = false;
+    logger.info('Firefly circuit breaker: closed');
+  }
+}
+
+function recordFailure(): void {
+  failureCount++;
+  lastFailureTime = Date.now();
+  if (failureCount >= FAILURE_THRESHOLD) {
+    circuitOpen = true;
+    logger.warn({ failureCount }, 'Firefly circuit breaker: OPEN');
+  }
+}
 
 const ff = axios.create({
   baseURL: `${config.fireflyUrl}/api/v1`,
   headers: { Authorization: `Bearer ${config.fireflyToken}`, 'Content-Type': 'application/json' },
   timeout: 30000,
 });
+
+// Add retry + circuit breaker interceptor
+ff.interceptors.response.use(
+  (response) => { recordSuccess(); return response; },
+  async (error: AxiosError) => {
+    const cfg = error.config;
+    if (!cfg) { recordFailure(); return Promise.reject(error); }
+
+    // Only retry on network errors or 5xx, max 2 retries
+    const retryCount = ((cfg as unknown as Record<string, unknown>).__retryCount as number) || 0;
+    const isRetryable = !error.response || (error.response.status >= 500 && error.response.status < 600);
+
+    if (isRetryable && retryCount < 2) {
+      ((cfg as unknown as Record<string, unknown>).__retryCount) = retryCount + 1;
+      const delay = Math.pow(2, retryCount) * 1000; // exponential backoff: 1s, 2s
+      logger.warn({ url: cfg.url, attempt: retryCount + 1, delay }, 'Firefly request retry');
+      await new Promise(r => setTimeout(r, delay));
+      return ff(cfg);
+    }
+
+    recordFailure();
+    return Promise.reject(error);
+  }
+);
+
+// Wrap all Firefly calls with circuit check
+const originalGet = ff.get.bind(ff);
+const originalPost = ff.post.bind(ff);
+const originalPut = ff.put.bind(ff);
+const originalDelete = ff.delete.bind(ff);
+ff.get = (...args: Parameters<typeof ff.get>) => { checkCircuit(); return originalGet(...args); };
+ff.post = (...args: Parameters<typeof ff.post>) => { checkCircuit(); return originalPost(...args); };
+ff.put = (...args: Parameters<typeof ff.put>) => { checkCircuit(); return originalPut(...args); };
+ff.delete = (...args: Parameters<typeof ff.delete>) => { checkCircuit(); return originalDelete(...args); };
 
 // ── Accounts ──────────────────────────────────────────────────────────────────
 export async function getAccounts(type?: string) {

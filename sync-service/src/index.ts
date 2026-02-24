@@ -1,12 +1,19 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { config } from './config';
-import { testConnection } from './db/client';
+import { testConnection, closePool } from './db/client';
 import { isHealthy as fireflyHealthy } from './firefly/client';
 import { startWatcher } from './financedl/watcher';
-import { startScheduler } from './jobs/scheduler';
+import { startScheduler, stopScheduler } from './jobs/scheduler';
+import { requireAuth } from './middleware/auth';
+import logger from './lib/logger';
 
 // Route imports
+import authRouter from './api/routes/auth';
+import billingRouter from './api/routes/billing';
 import assetsRouter from './api/routes/assets';
 import uploadRouter from './api/routes/upload';
 import syncRouter from './api/routes/sync';
@@ -19,12 +26,42 @@ import insuranceRouter from './api/routes/insurance';
 import budgetsRouter from './api/routes/budgets';
 import tagsRouter from './api/routes/tags';
 import transactionsRouter from './api/routes/transactions';
+import plaidRouter from './api/routes/plaid';
 
 const app = express();
 
-app.use(cors({ origin: '*' }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// ── Security middleware ───────────────────────────────────────────────────────
+app.use(helmet());
+app.use(cookieParser());
+
+// Global rate limit: 200 requests per 15 min per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+app.use(globalLimiter);
+
+// Strict rate limit for auth endpoints: 20 requests per 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts, please try again later' },
+});
+
+// CORS: restrict to app URL in production, allow frontend origin in development
+const corsOrigin = config.isProd ? config.appUrl : [config.appUrl, 'http://localhost:57072', 'http://localhost:5173'];
+app.use(cors({ origin: corsOrigin, credentials: true }));
+
+// Stripe webhooks need the raw body — must come before express.json()
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Health endpoint
 app.get('/health', async (_req, res) => {
@@ -48,7 +85,16 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+// Public routes (no auth required)
+app.use('/api/auth', authLimiter, authRouter);
+app.use('/api/billing', billingRouter); // /plans + /webhook are public; /checkout + /portal use requireAuth internally
+app.post('/api/plaid/webhook', express.json(), plaidRouter); // Plaid webhooks are unauthenticated
+
+// All routes below this line require a valid JWT
+app.use(requireAuth);
+
 // API routes
+app.use('/api/plaid', plaidRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/sync', syncRouter);
@@ -67,20 +113,29 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Error handler
+// Error handler — never leak stack traces or internal details in production
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[Express] Unhandled error:', err.message);
+  logger.error({ err: err.message }, 'Unhandled Express error');
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// ── Process-level error handlers ──────────────────────────────────────────────
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason: reason instanceof Error ? reason.message : String(reason) }, 'Unhandled Promise rejection');
+});
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err: err.message }, 'Uncaught exception — shutting down');
+  process.exit(1);
 });
 
 async function waitForDB(retries = 15, delayMs = 4000): Promise<void> {
   for (let i = 1; i <= retries; i++) {
     try {
       await testConnection();
-      console.log('[DB] Connected');
+      logger.info('Database connected');
       return;
-    } catch (err) {
-      console.log(`[DB] Attempt ${i}/${retries} failed — retrying in ${delayMs / 1000}s`);
+    } catch {
+      logger.warn({ attempt: i, maxRetries: retries }, 'DB connection failed — retrying');
       await new Promise(r => setTimeout(r, delayMs));
     }
   }
@@ -88,7 +143,7 @@ async function waitForDB(retries = 15, delayMs = 4000): Promise<void> {
 }
 
 async function main() {
-  console.log(`[FinanceOS] Starting sync-service (${config.nodeEnv})...`);
+  logger.info({ env: config.nodeEnv }, 'Starting sync-service');
 
   await waitForDB();
 
@@ -96,31 +151,32 @@ async function main() {
   try {
     startWatcher(config.downloadsDir);
   } catch (err) {
-    console.warn('[Watcher] Failed to start:', err instanceof Error ? err.message : err);
+    logger.warn({ err: err instanceof Error ? err.message : err }, 'Watcher failed to start');
   }
 
   // Start cron scheduler
   try {
     startScheduler();
   } catch (err) {
-    console.warn('[Scheduler] Failed to start:', err instanceof Error ? err.message : err);
+    logger.warn({ err: err instanceof Error ? err.message : err }, 'Scheduler failed to start');
   }
 
   const server = app.listen(config.port, () => {
-    console.log(`[FinanceOS] API listening on port ${config.port}`);
-    console.log(`[FinanceOS] Firefly III: ${config.fireflyUrl}`);
-    console.log(`[FinanceOS] Downloads dir: ${config.downloadsDir}`);
+    logger.info({ port: config.port, firefly: config.fireflyUrl }, 'API listening');
   });
 
-  // Graceful shutdown
+  // Graceful shutdown — close HTTP, DB pool, and scheduler
   const shutdown = async (signal: string) => {
-    console.log(`[FinanceOS] ${signal} received — shutting down gracefully...`);
-    server.close(() => {
-      console.log('[FinanceOS] HTTP server closed');
+    logger.info({ signal }, 'Graceful shutdown initiated');
+    stopScheduler();
+    server.close(async () => {
+      logger.info('HTTP server closed');
+      await closePool();
+      logger.info('DB pool closed');
       process.exit(0);
     });
     setTimeout(() => {
-      console.error('[FinanceOS] Forced shutdown after timeout');
+      logger.error('Forced shutdown after timeout');
       process.exit(1);
     }, 10_000);
   };
@@ -130,6 +186,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('[FinanceOS] Fatal startup error:', err);
+  logger.fatal({ err: err instanceof Error ? err.message : err }, 'Fatal startup error');
   process.exit(1);
 });

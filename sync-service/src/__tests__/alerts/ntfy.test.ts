@@ -99,12 +99,22 @@ describe('createAlert', () => {
     expect(params).toContain('Something happened');
   });
 
-  test('saves the ruleType as first bind parameter', async () => {
+  test('saves userId as first bind parameter (null when absent)', async () => {
     await createAlert(basePayload, false);
     const dbCall = mockQuery.mock.calls.find(
       c => typeof c[0] === 'string' && c[0].includes('INSERT INTO alert_history')
     );
-    expect(dbCall![1][0]).toBe('test_rule');
+    expect(dbCall![1][0]).toBeNull();
+    expect(dbCall![1][1]).toBe('test_rule');
+  });
+
+  test('saves userId when provided', async () => {
+    await createAlert({ ...basePayload, userId: 'user-123' }, false);
+    const dbCall = mockQuery.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('INSERT INTO alert_history')
+    );
+    expect(dbCall![1][0]).toBe('user-123');
+    expect(dbCall![1][1]).toBe('test_rule');
   });
 
   test('sends push notification when sendPush=true (default)', async () => {
@@ -129,7 +139,7 @@ describe('createAlert', () => {
     const dbCall = mockQuery.mock.calls.find(
       c => typeof c[0] === 'string' && c[0].includes('INSERT INTO alert_history')
     );
-    const metaParam = dbCall![1][4];
+    const metaParam = dbCall![1][5];
     expect(typeof metaParam).toBe('string');
     const parsed = JSON.parse(metaParam as string);
     expect(parsed.amount).toBe(250);
@@ -142,6 +152,6 @@ describe('createAlert', () => {
     const dbCall = mockQuery.mock.calls.find(
       c => typeof c[0] === 'string' && c[0].includes('INSERT INTO alert_history')
     );
-    expect(dbCall![1][4]).toBeNull();
+    expect(dbCall![1][5]).toBeNull();
   });
 });
